@@ -1,0 +1,14 @@
+Output = test.$(Cluster).out
+Error = test.$(Cluster).err
+Log = test.$(Cluster).log
+
+Executable = /bin/date
+Transfer_Executable = false
+
+REMOVED = 3
+MINUTE = 60
+
+Leave_In_Queue  = (JobStatus != $(REMOVED)) && ((time() - EnteredCurrentStatus) < 15 * $(MINUTE))
+
+Queue 1
+
