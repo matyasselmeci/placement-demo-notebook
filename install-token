@@ -13,16 +13,29 @@ fail () {
 }
 
 
-if [[ $* == -h || $* == --help ]]; then
-    usage 0
-fi
-
-
 set -o nounset
 
-Token_file=${1:-$HOME/ap-placement.tkn}
-[[ -f $Token_file ]] || fail 3 Token file "$Token_file" not found
+if [[ $1 ]]; then
+    Token_File=$1
+    [[ -f $Token_File ]] || fail 3 Token file "$Token_File" not found
+else
+    # Caller did not specify a file. Look for it in the current directory,
+    # then the parent directory.
+    if [[ -f $PWD/ap-placement.tkn ]]; then
+        Token_File=$PWD/ap-placement.tkn
+    elif [[ -f $HOME/ap-placement.tkn ]]; then
+        Token_File=$HOME/ap-placement.tkn
+    else
+        fail 3 \
+'Token file not specified and could not be found.
+Upload a file named ap-placement.tkn to this directory and run
+'"$(basename "$0")" again.
+    fi
+fi
 # TODO Check if expired
-install -o $(whoami) -m 0600 "$Token_file" "$HOME/.condor/tokens.d/ap-placement.tkn"
+install -o $(whoami) -m 0600 "$Token_File" "$HOME/.condor/tokens.d/ap-placement.tkn" \
+    || fail 4 "Token file $Token_File could not be installed"
+
+echo "OK"
 
 # vim:et:sw=4:sts=4:ts=8
