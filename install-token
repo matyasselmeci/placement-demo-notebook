@@ -1,0 +1,28 @@
+#!/bin/bash
+
+fail () {
+    set +exu
+    ret=${1:-1}
+    shift &>/dev/null || :
+    if [[ -z $* ]]; then
+        echo "unspecified failure, exiting" >&2
+    else
+        echo "$@" >&2
+    fi
+    exit "$ret"
+}
+
+
+if [[ $* == -h || $* == --help ]]; then
+    usage 0
+fi
+
+
+set -o nounset
+
+Token_file=${1:-$HOME/ap-placement.tkn}
+[[ -f $Token_file ]] || fail 3 Token file "$Token_file" not found
+# TODO Check if expired
+install -o $(whoami) -m 0600 "$Token_file" "$HOME/.condor/tokens.d/ap-placement.tkn"
+
+# vim:et:sw=4:sts=4:ts=8
