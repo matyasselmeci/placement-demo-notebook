@@ -16,7 +16,7 @@ fail () {
 
 set -o nounset
 
-if [[ $1 ]]; then
+if [[ ${1-} ]]; then
     Token_File=$1
     [[ -f $Token_File ]] || fail 3 Token file "$Token_File" not found
 else
@@ -34,7 +34,7 @@ Upload a file named ap-placement.tkn to this directory and run
     fi
 fi
 # TODO Check if expired
-install -o $(whoami) -m 0600 "$Token_File" "$HOME/.condor/tokens.d/ap-placement.tkn" \
+install -o "$(whoami)" -m 0600 "$Token_File" "$HOME/.condor/tokens.d/ap-placement.tkn" \
     || fail 4 "Token file $Token_File could not be installed"
 
 echo "OK"
