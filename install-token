@@ -1,14 +1,15 @@
 #!/bin/bash
+#
+# install a token file, looking for a file named "ap-placement.tkn",
+# into the current user's ~/.condor/tokens.d directory, setting the
+# appropriate permissions.
+#
+
 
 fail () {
     set +exu
-    ret=${1:-1}
-    shift &>/dev/null || :
-    if [[ -z $* ]]; then
-        echo "unspecified failure, exiting" >&2
-    else
-        echo "$@" >&2
-    fi
+    ret=$1; shift
+    echo "$@" >&2
     exit "$ret"
 }
 
