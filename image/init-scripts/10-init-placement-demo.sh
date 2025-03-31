@@ -4,7 +4,9 @@
 # at container startup.
 #
 
-if [ "$(id -un)" = "jovyan" ]
+# The Kubernetes startup scripts cannot test for the name jovyan because they
+# rely on sssd to create that user.
+if [ "$(id -u)" = 1000 ]
 then
     (
         cd "$HOME"

@@ -27,7 +27,7 @@ Example invocation:
 ```
 TAG=notebook:placementd
 docker run -i -t --rm -v \
-    $PWD/init-scripts/20-clone-notebook.sh:/image-init.d/20-clone-notebook.sh \
+    $PWD/init-scripts/10-init-placement-demo.sh:/image-init.d/10-init-placement-demo.sh \
     --name pdnotebook --hostname pdnotebook \
     -e _condor_CONDOR_HOST=cm.example.net:9618 \
     -e _condor_SCHEDD_HOST=ap.example.net \
