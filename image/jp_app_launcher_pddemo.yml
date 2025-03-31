@@ -1,0 +1,9 @@
+# Configuration for JupyterLab App Launcher
+# https://jupyter-app-launcher.readthedocs.io/en/latest/usage.html#open-a-predefined-notebook
+
+- title: PlacementD Demo
+  description: Demo of placing a job onto an AP with a PlacementD
+  # Source is relative to the configuration file's directory (typically $HOME/.local/share/jupyter/jupyter_app_launcher)
+  source: ../../../../placement-demo-notebook/demo.ipynb
+  type: notebook
+

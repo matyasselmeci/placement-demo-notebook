@@ -13,7 +13,6 @@ then
         git clone https://github.com/matyasselmeci/placement-demo-notebook
         cd placement-demo-notebook &&
         cp \
-            demo.ipynb \
             install-token \
             test.sub \
             ..

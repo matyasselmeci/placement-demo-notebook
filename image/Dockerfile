@@ -16,5 +16,14 @@ RUN true \
 
 USER $NB_UID:$NB_GID
 
+RUN true \
+    && python3 -m pip install -U --no-cache-dir \
+        jupyter_app_launcher \
+    && true
+
+ADD --chmod=0644 --chown=$NB_UID:$NB_GID \
+    jp_app_launcher_pddemo.yml \
+    /home/jovyan/.local/share/jupyter/jupyter_app_launcher/jp_app_launcher_pddemo.yml
+
 ENV _condor_SEC_CLIENT_AUTHENTICATION_METHODS=FS,IDTOKENS
 
