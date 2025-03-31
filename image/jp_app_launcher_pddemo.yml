@@ -6,4 +6,5 @@
   # Source is relative to the configuration file's directory (typically $HOME/.local/share/jupyter/jupyter_app_launcher)
   source: ../../../../placement-demo-notebook/demo.ipynb
   type: notebook
+  catalog: "Notebook"
 
