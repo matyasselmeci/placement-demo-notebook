@@ -1,0 +1,5 @@
+## Allow users to run commands as Jupyter's default user.
+
+Defaults: ALL,!root always_set_home,!env_reset,!secure_path,runas_default=jovyan
+
+ALL,!root ALL = (jovyan) NOPASSWD: ALL
