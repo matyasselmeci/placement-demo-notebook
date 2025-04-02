@@ -18,6 +18,7 @@ USER $NB_UID:$NB_GID
 
 RUN true \
     && python3 -m pip install -U --no-cache-dir \
+        ipywidgets \
         jupyter_app_launcher \
     && true
 
