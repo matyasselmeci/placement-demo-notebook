@@ -20,6 +20,8 @@ RUN true \
     && python3 -m pip install -U --no-cache-dir \
         ipywidgets \
         jupyter_app_launcher \
+    && rm -rf /opt/conda/lib/python3.12/site-packages/htcondor2 \
+    && ln -s /usr/lib/python3/dist-packages/htcondor2 /opt/conda/lib/python3.12/site-packages/htcondor2 \
     && true
 
 ADD --chmod=0644 --chown=$NB_UID:$NB_GID \
