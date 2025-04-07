@@ -99,5 +99,7 @@ def print_placement_status(placement: htcondor2.SubmitResult, schedd: htcondor2.
         (5, "held"),
     ]:
         num_in_status = len([j for j in query if j["JobStatus"] == code])
-        if num_in_status:
-            print(f"{num_in_status} job(s) are in {name} state.")
+        if num_in_status > 1:
+            print(f"{num_in_status} jobs are in {name} state.")
+        elif num_in_status == 1:
+            print(f"1 job is in the {name} state.")
