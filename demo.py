@@ -8,6 +8,9 @@ import ipywidgets as widgets
 from IPython.display import display
 
 
+TOKEN_FILENAME = "ap-placement.tkn"
+
+
 def write_token(token_filename: str, token_contents: bytes):
     """
     Write the given bytes to a token file in the condor tokens dir.
@@ -23,6 +26,16 @@ def write_token(token_filename: str, token_contents: bytes):
     with open(token_dest, mode="wb") as fh:
         token_dest.chmod(0o600)
         fh.write(token_contents)
+
+
+def token_stat(token_filename: str):
+    condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
+    condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    token_dest = condor_tokens_dir / token_filename
+    try:
+        return token_dest.stat()
+    except OSError:
+        return None
 
 
 class Widgets:
@@ -49,12 +62,21 @@ class Widgets:
             layout=items_layout,
         )
         self.token_widget.observe(self.on_token_upload, names="value")
+
         self.token_label_widget = widgets.Label(
-            "Please upload a token", layout=items_layout
+            "", layout=items_layout
         )
         self.token_box = widgets.Box(
             [self.token_label_widget, self.token_widget], layout=box_layout
         )
+
+    def set_token_label_text(self):
+        ts = token_stat(TOKEN_FILENAME)
+        if not ts:
+            self.token_label_widget.value = "Please upload a token"
+        else:
+            dt = datetime.datetime.fromtimestamp(ts.st_ctime, tz=self.tz)
+            self.token_label_widget.value = f"Token uploaded at {dt:%H:%M}"
 
     def on_token_upload(self, change: dict):
         """
@@ -64,17 +86,19 @@ class Widgets:
         value = self.token_widget.value
         if value:  # we have data
             # Write out the uploaded data to a file
-            write_token("ap-placement-upload.tkn", value[0].content.tobytes())
+            write_token(TOKEN_FILENAME, value[0].content.tobytes())
             # Clear the value (so saving the widget state won't embed the token)
             # in the notebook.  (Can't use the 'value' local var here, we need
             # to overwrite what's in the widget).
             self.token_widget.value = ()
 
             # Set the label to show the last successful upload time.
-            now = datetime.datetime.now(tz=self.tz)
-            self.token_label_widget.value = f"Upload successful at {now:%H:%M}"
+            self.set_token_label_text()
+            # now = datetime.datetime.now(tz=self.tz)
+            # self.token_label_widget.value = f"Upload successful at {now:%H:%M}"
 
     def display_widgets(self):
+        self.set_token_label_text()
         display(self.token_box)
 
 
