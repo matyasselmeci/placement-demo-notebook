@@ -3,6 +3,7 @@ import os
 import pathlib
 
 import dateutil
+import htcondor2
 import ipywidgets as widgets
 from IPython.display import display
 
@@ -83,3 +84,20 @@ def setup():
     """
     wid = Widgets()
     wid.display_widgets()
+
+
+def print_placement_status(placement: htcondor2.SubmitResult, schedd: htcondor2.Schedd):
+    """
+    Print the status of jobs in the cluster from a placement (SubmitResult).
+    """
+    query = schedd.query(f"ClusterId == {placement.cluster()}", ["JobStatus"])
+    for code, name in [
+        (1, "idle"),
+        (2, "running"),
+        (3, "removed"),
+        (4, "completed"),
+        (5, "held"),
+    ]:
+        num_in_status = len([j for j in query if j["JobStatus"] == code])
+        if num_in_status:
+            print(f"{num_in_status} job(s) are in {name} state.")
