@@ -13,9 +13,7 @@ then
         git clone https://github.com/matyasselmeci/placement-demo-notebook placement_demo
         cd placement_demo &&
         cp \
-            install-token \
-            test.sub \
-            setup_notebook.py \
+            demo.py \
             ..
     )
 fi
