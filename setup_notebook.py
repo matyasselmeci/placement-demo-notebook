@@ -1,6 +1,8 @@
 import datetime
+import os
 import pathlib
 
+import dateutil
 import ipywidgets as widgets
 from IPython.display import display
 
@@ -24,13 +26,34 @@ def write_token(token_filename: str, token_contents: bytes):
 
 class Widgets:
     def __init__(self):
+        maybe_tz = os.environ.get("TIMEZONE")
+        if maybe_tz:
+            self.tz = dateutil.tz.gettz(maybe_tz)
+        else:
+            self.tz = dateutil.tz.gettz()
+
+        # The description on the FileUpload widget doesn't fit the default
+        # layout so set up one of our own.  See
+        # https://ipywidgets.readthedocs.io/en/latest/examples/Widget%20Layout.html#examples
+        items_layout = widgets.Layout(width="auto")
+        box_layout = widgets.Layout(
+            display="flex", flex_flow="column", align_items="stretch", width="50%"
+        )
+
         # Create the 'upload' button for uploading the token;
         # call on_token_upload when "value" changes, i.e., a file is uploaded.
         self.token_widget = widgets.FileUpload(
-            accept=".tkn", description="Click to select a token to upload"
+            accept=".tkn",
+            description="Click to select a token to upload",
+            layout=items_layout,
         )
         self.token_widget.observe(self.on_token_upload, names="value")
-        self.token_label_widget = widgets.Label("Please upload a token")
+        self.token_label_widget = widgets.Label(
+            "Please upload a token", layout=items_layout
+        )
+        self.token_box = widgets.Box(
+            [self.token_label_widget, self.token_widget], layout=box_layout
+        )
 
     def on_token_upload(self, change: dict):
         """
@@ -47,12 +70,11 @@ class Widgets:
             self.token_widget.value = ()
 
             # Set the label to show the last successful upload time.
-            now = datetime.datetime.now()
+            now = datetime.datetime.now(tz=self.tz)
             self.token_label_widget.value = f"Upload successful at {now:%H:%M}"
 
     def display_widgets(self):
-        display(self.token_widget)
-        display(self.token_label_widget)
+        display(self.token_box)
 
 
 def setup():
