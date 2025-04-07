@@ -16,10 +16,10 @@ RUN true \
 
 USER $NB_UID:$NB_GID
 
+ADD requirements.txt /tmp/requirements.txt
+
 RUN true \
-    && python3 -m pip install -U --no-cache-dir \
-        ipywidgets \
-        jupyter_app_launcher \
+    && python3 -m pip install -U --no-cache-dir -r /tmp/requirements.txt \
     && rm -rf /opt/conda/lib/python3.12/site-packages/htcondor2 \
     && ln -s /usr/lib/python3/dist-packages/htcondor2 /opt/conda/lib/python3.12/site-packages/htcondor2 \
     && true
