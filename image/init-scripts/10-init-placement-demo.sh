@@ -15,6 +15,7 @@ then
         cp \
             install-token \
             test.sub \
+            setup_notebook.py \
             ..
     )
 fi
