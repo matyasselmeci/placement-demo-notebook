@@ -29,6 +29,10 @@ def write_token(token_filename: str, token_contents: bytes):
 
 
 def token_stat(token_filename: str):
+    """
+    Calls stat() on the token file and returns the results.  If there is
+    an error (e.g., the file does not exist), returns None.
+    """
     condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
     condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     token_dest = condor_tokens_dir / token_filename
@@ -71,6 +75,12 @@ class Widgets:
         )
 
     def set_token_label_text(self):
+        """
+        Sets the label next to the 'token upload' button to either the
+        time of when the token was uploaded (as obtained from the token file
+        timestamp) or text asking the user to upload a token.
+        """
+        # TODO This should just return the text instead of setting the widget.
         ts = token_stat(TOKEN_FILENAME)
         if not ts:
             self.token_label_widget.value = "Please upload a token"
