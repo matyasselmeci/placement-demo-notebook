@@ -1,18 +1,19 @@
 import datetime
 import os
 import pathlib
+import re
 import shutil
 import sys
 import time
 
 import dateutil
+import dateutil.tz
 import htcondor2
 import ipywidgets as widgets
 from IPython.display import Javascript, display
 
 
 TOKEN_FILENAME = "Placement.token"
-COOKIE_TOKEN_FILENAME = "ap-placement-cookie.tkn"
 
 
 def ensure_tokens_dir() -> pathlib.Path:
@@ -115,6 +116,22 @@ def extract_cookie_and_put(token_path: str) -> None:
     )
 
 
+def is_valid_token_file(token_path) -> bool:
+    """
+    Return True if the token at token_path appears to be a token.
+    """
+    if not os.path.isfile(token_path):
+        return False
+    try:
+        with open(token_path, "rb") as fh:
+            contents = fh.read(4096)
+            if not re.match(rb"[A-Za-z0-9_=-]+[.][A-Za-z0-9_=-]+[.][A-Za-z0-9_=-]+", contents):
+                return False
+            return True
+    except OSError:
+        return False
+
+
 def upload_cookie_token(max_wait_secs=10.0) -> bool:
     """
     Put the token from the cookie named `placement_token` into the condor
@@ -135,9 +152,14 @@ def upload_cookie_token(max_wait_secs=10.0) -> bool:
         time.sleep(0.1)
         elapsed_secs += 0.1
         if elapsed_secs > max_wait_secs:
-            print("Token upload failed", file=sys.stderr)
+            print("Token upload from cookie failed. You may need to get a new", file=sys.stderr)
+            print("token and try again or upload a token from a file.", file=sys.stderr)
             return False
-    install_token_file(cookie_token_path, COOKIE_TOKEN_FILENAME)
+    if not is_valid_token_file(cookie_token_path):
+        print("Token upload from cookie failed. You may need to get a new", file=sys.stderr)
+        print("token and try again or upload a token from a file.", file=sys.stderr)
+        return False
+    install_token_file(cookie_token_path, TOKEN_FILENAME)
     return True
 
 
@@ -153,6 +175,22 @@ def token_stat(token_filename: str):
         return token_dest.stat()
     except OSError:
         return None
+
+
+def get_token_timestamp(token_filename, tz):
+    # type: (str, None|datetime.tzinfo) -> None|datetime.datetime
+    """
+    Return the timestamp of the token file, or None if no timestamp can be
+    determined.
+
+    Arguments:
+        token_filename: The basename of a token
+    """
+    ts = token_stat(token_filename)
+    if not ts:
+        return None
+    else:
+        return datetime.datetime.fromtimestamp(ts.st_ctime, tz=tz)
 
 
 class Widgets:
@@ -187,19 +225,18 @@ class Widgets:
             [self.token_label_widget, self.token_widget], layout=box_layout
         )
 
-    def set_token_label_text(self):
+    def get_text_for_token_label(self) -> str:
         """
-        Sets the label next to the 'token upload' button to either the
-        time of when the token was uploaded (as obtained from the token file
-        timestamp) or text asking the user to upload a token.
+        Get the text for  the label next to the 'token upload' button.
+        This will either be the time of when the token was uploaded
+        (as obtained from the token file timestamp) or text asking the
+        user to upload a token.
         """
-        # TODO This should just return the text instead of setting the widget.
-        ts = token_stat(TOKEN_FILENAME)
-        if not ts:
-            self.token_label_widget.value = "Please upload a token"
+        token_timestamp = get_token_timestamp(TOKEN_FILENAME, self.tz)
+        if not token_timestamp:
+            return "Please upload a token"
         else:
-            dt = datetime.datetime.fromtimestamp(ts.st_ctime, tz=self.tz)
-            self.token_label_widget.value = f"Token uploaded at {dt:%H:%M}"
+            return f"Token uploaded at {token_timestamp:%H:%M}"
 
     def on_token_upload(self, change: dict):
         """
@@ -216,15 +253,13 @@ class Widgets:
             self.token_widget.value = ()
 
             # Set the label to show the last successful upload time.
-            self.set_token_label_text()
-            # now = datetime.datetime.now(tz=self.tz)
-            # self.token_label_widget.value = f"Upload successful at {now:%H:%M}"
+            self.token_label_widget.value = self.get_text_for_token_label()
 
             self.token_widget.button_style = "success"
             self.token_widget.description = "Token Uploaded"
 
     def display_widgets(self):
-        self.set_token_label_text()
+        self.token_label_widget.value = self.get_text_for_token_label()
         display(self.token_box)
 
 
@@ -232,8 +267,11 @@ def setup():
     """
     Set up the widgets in the demo notebook.
     """
-    wid = Widgets()
-    wid.display_widgets()
+    if upload_cookie_token():
+        print("Token upload successful. Please continue with the rest of the notebook.")
+    else:
+        wid = Widgets()
+        wid.display_widgets()
 
 
 def print_placement_status(placement: htcondor2.SubmitResult, schedd: htcondor2.Schedd):
