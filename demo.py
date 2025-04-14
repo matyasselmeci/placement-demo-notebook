@@ -1,15 +1,33 @@
 import datetime
 import os
 import pathlib
+import shutil
+import sys
+import time
 
 import dateutil
 import htcondor2
 import ipywidgets as widgets
-from IPython.display import display
-
+from IPython.display import Javascript, display
 
 
 TOKEN_FILENAME = "Placement.token"
+COOKIE_TOKEN_FILENAME = "ap-placement-cookie.tkn"
+
+
+def ensure_tokens_dir() -> pathlib.Path:
+    """
+    Ensure that the directory condor looks for tokens in exists and has the
+    right permissions.
+
+    Returns:
+        the pathlib.Path of the tokens directory
+    """
+    condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
+    # need two steps here: mkdir(mode=0o700, ...) does nothing if the dir already exists
+    condor_tokens_dir.mkdir(parents=True, exist_ok=True)
+    condor_tokens_dir.chmod(0o700)
+    return condor_tokens_dir
 
 
 def write_token(token_filename: str, token_contents: bytes):
@@ -21,12 +39,106 @@ def write_token(token_filename: str, token_contents: bytes):
 
     token_contents: The bytes to write into the token file.
     """
-    condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
-    condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    token_dest = condor_tokens_dir / token_filename
+    token_dest = ensure_tokens_dir() / token_filename
     with open(token_dest, mode="wb") as fh:
         token_dest.chmod(0o600)
         fh.write(token_contents)
+
+
+JS_FUNCTION_GETCOOKIE = """
+function getCookie(name) {
+    let nameEquals = name + '=';
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, nameEquals.length) === nameEquals) {
+                return decodeURIComponent(cookie.substring(nameEquals.length));
+            }
+        }
+    }
+    return null;
+}
+"""
+JS_PUT_TOKEN = """
+var placement_token = getCookie("placement_token");
+var the_request = {
+  method: 'PUT',
+  body: JSON.stringify({
+    content: btoa(placement_token),
+    format: 'base64',
+    type: 'file'
+  }),
+  headers: {
+    'Content-Type': 'application/json',
+    'X-XSRFToken': getCookie("_xsrf")
+  }
+};
+fetch(`/api/contents/%(dest_path)s`, the_request).then((response) => {
+    if (!response.ok) {
+        window.alert("Uploading token cookie failed");
+    }
+});
+"""
+
+
+def install_token_file(source_path, token_filename):
+    # type: (str|os.PathLike, str) -> None
+    """
+    Moves an existing token file into the condor tokens directory and gives it the correct permissions.
+
+    Arguments:
+        source_path: The location of the existing token file
+        token_filename: The basename of the destination token file
+    """
+    token_dest = ensure_tokens_dir() / token_filename
+    shutil.move(source_path, token_dest)
+    token_dest.chmod(0o700)
+    os.chown(token_dest, os.getuid(), os.getgid())
+
+
+def extract_cookie_and_put(token_path: str) -> None:
+    """
+    Add Javascript to the page to extract the placement_token cookie
+    out of the browser and upload it to the Jupyter server at the given path.
+
+    Arguments:
+        token_path: The path the token will be uploaded to, which must be
+            relative to the home directory and not contain any hidden
+            components (dirs starting with ".").
+    """
+    # These must be in one call for them to be in each others' scope.
+    # (Alternatively, I could add properties to a global such as `document`
+    #  but that seems like it pollutes the namespace.)
+    display(
+        Javascript(JS_FUNCTION_GETCOOKIE + (JS_PUT_TOKEN % {"dest_path": token_path}))
+    )
+
+
+def upload_cookie_token(max_wait_secs=10.0) -> bool:
+    """
+    Put the token from the cookie named `placement_token` into the condor
+    tokens directory.
+
+    Arguments:
+        max_wait_secs: The max number of seconds to wait for the token to
+            appear before giving up and returning failure.
+
+    Returns
+        True on success, False on failure
+    """
+    upload_filename = f"tmp-upload-{time.time()}.tkn"
+    extract_cookie_and_put(upload_filename)
+    cookie_token_path = pathlib.Path.home() / upload_filename
+    elapsed_secs = 0.0
+    while not cookie_token_path.exists():
+        time.sleep(0.1)
+        elapsed_secs += 0.1
+        if elapsed_secs > max_wait_secs:
+            print("Token upload failed", file=sys.stderr)
+            return False
+    install_token_file(cookie_token_path, COOKIE_TOKEN_FILENAME)
+    return True
 
 
 def token_stat(token_filename: str):
@@ -36,7 +148,7 @@ def token_stat(token_filename: str):
     """
     condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
     condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    token_dest = condor_tokens_dir / token_filename
+    token_dest = ensure_tokens_dir() / token_filename
     try:
         return token_dest.stat()
     except OSError:
@@ -70,9 +182,7 @@ class Widgets:
         )
         self.token_widget.observe(self.on_token_upload, names="value")
 
-        self.token_label_widget = widgets.Label(
-            "", layout=items_layout
-        )
+        self.token_label_widget = widgets.Label("", layout=items_layout)
         self.token_box = widgets.Box(
             [self.token_label_widget, self.token_widget], layout=box_layout
         )
