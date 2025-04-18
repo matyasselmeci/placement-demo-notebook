@@ -8,7 +8,8 @@ import ipywidgets as widgets
 from IPython.display import display
 
 
-TOKEN_FILENAME = "ap-placement.tkn"
+
+TOKEN_FILENAME = "Placement.token"
 
 
 def write_token(token_filename: str, token_contents: bytes):
@@ -61,9 +62,11 @@ class Widgets:
         # Create the 'upload' button for uploading the token;
         # call on_token_upload when "value" changes, i.e., a file is uploaded.
         self.token_widget = widgets.FileUpload(
-            accept=".tkn",
+            accept=".tkn,.token",
             description="Click to select a token to upload",
             layout=items_layout,
+            multiple=False,
+            button_style="primary",
         )
         self.token_widget.observe(self.on_token_upload, names="value")
 
@@ -106,6 +109,9 @@ class Widgets:
             self.set_token_label_text()
             # now = datetime.datetime.now(tz=self.tz)
             # self.token_label_widget.value = f"Upload successful at {now:%H:%M}"
+
+            self.token_widget.button_style = "success"
+            self.token_widget.description = "Token Uploaded"
 
     def display_widgets(self):
         self.set_token_label_text()
