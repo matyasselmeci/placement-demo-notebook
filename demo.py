@@ -144,7 +144,7 @@ def upload_cookie_token(max_wait_secs=10.0) -> bool:
     Returns
         True on success, False on failure
     """
-    upload_filename = f"tmp-upload-{time.time()}.tkn"
+    upload_filename = f"tmp-upload-{time.time()}.token"
     extract_cookie_and_put(upload_filename)
     cookie_token_path = pathlib.Path.home() / upload_filename
     elapsed_secs = 0.0
