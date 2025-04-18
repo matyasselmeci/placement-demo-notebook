@@ -62,7 +62,7 @@ function getCookie(name) {
 }
 """
 JS_PUT_TOKEN = """
-var placement_token = getCookie("placement_token");
+var placement_token = getCookie("placement_token_token");
 var the_request = {
   method: 'PUT',
   body: JSON.stringify({
@@ -134,7 +134,7 @@ def is_valid_token_file(token_path) -> bool:
 
 def upload_cookie_token(max_wait_secs=10.0) -> bool:
     """
-    Put the token from the cookie named `placement_token` into the condor
+    Put the token from the cookie named `placement_token_token` into the condor
     tokens directory.
 
     Arguments:

@@ -4,7 +4,7 @@ ADD --chmod=0644 condor/condor_*.deb \
                  condor/htcondor_*.deb \
                  condor/minicondor_*.deb \
                  condor/minihtcondor_*.deb \
-                 /condor-debs
+                 /condor-debs/
 
 USER root
 
