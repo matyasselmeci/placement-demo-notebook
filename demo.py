@@ -148,16 +148,20 @@ def upload_cookie_token(max_wait_secs=10.0) -> bool:
     extract_cookie_and_put(upload_filename)
     cookie_token_path = pathlib.Path.home() / upload_filename
     elapsed_secs = 0.0
+    fail_text = """\
+Token upload from cookie failed.
+Please go to the Placement Token webpage linked above, obtain a new Placement Token,
+and try again.  If the failure keeps happening, try downloading the token as a file,
+and uploading it using the button below.
+"""
     while not cookie_token_path.exists():
         time.sleep(0.1)
         elapsed_secs += 0.1
         if elapsed_secs > max_wait_secs:
-            print("Token upload from cookie failed. You may need to get a new", file=sys.stderr)
-            print("token and try again or upload a token from a file.", file=sys.stderr)
+            print(fail_text, file=sys.stderr)
             return False
     if not is_valid_token_file(cookie_token_path):
-        print("Token upload from cookie failed. You may need to get a new", file=sys.stderr)
-        print("token and try again or upload a token from a file.", file=sys.stderr)
+        print(fail_text, file=sys.stderr)
         return False
     install_token_file(cookie_token_path, TOKEN_FILENAME)
     return True
