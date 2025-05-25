@@ -10,7 +10,7 @@ if [ "$(id -u)" = 1000 ]
 then
     (
         cd "$HOME"
-        git clone https://github.com/matyasselmeci/placement-demo-notebook placement_demo
+        git clone -b "${NOTEBOOK_BRANCH:-main}" https://github.com/matyasselmeci/placement-demo-notebook placement_demo
         cd placement_demo &&
         cp \
             demo.py \
