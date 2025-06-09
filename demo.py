@@ -14,7 +14,7 @@ from IPython.display import display
 
 DEVICE_CLIENT_ID = "local_pd_notebook"  # XXX
 DEVICE_REQUEST_ENDPOINT = "/auth/device_authorization"
-WEBAPP_SERVER = "http://localhost:5000"  # XXX
+WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK", "http://localhost:5000")
 TOKEN_FILENAME = "Placement.token"
 _DEBUG = True
 
@@ -64,13 +64,13 @@ class PollForTokenResult(t.NamedTuple):
 
 
 def device_poll_for_token(
-        url: str,
         client_id: str,
         device_code: str,
         interval: int,
         expires_in: int,
     ) -> PollForTokenResult:
 
+    url = f"{WEBAPP_SERVER}{DEVICE_REQUEST_ENDPOINT}"
     expires_at = time.time() + float(expires_in)
     while time.time() < expires_at:
         response = requests.post(
@@ -126,7 +126,8 @@ def device_poll_for_token(
     return PollForTokenResult("timed_out", None)
 
 
-def device_request(url: str, client_id: str):
+def device_request(client_id: str):
+    url = f"{WEBAPP_SERVER}{DEVICE_REQUEST_ENDPOINT}"
     response = requests.post(
         url=url,
         data={"client_id": client_id},
