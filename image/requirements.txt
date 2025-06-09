@@ -1,3 +1,4 @@
 ipywidgets
 jupyter_app_launcher
 python-dateutil
+requests
