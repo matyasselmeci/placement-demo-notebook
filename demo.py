@@ -1,15 +1,23 @@
 import datetime
+import logging
 import os
 import pathlib
+import sys
+import time
+import typing as t
 
 import dateutil
 import htcondor2
+import requests
 import ipywidgets as widgets
 from IPython.display import display
 
 
-
+DEVICE_CLIENT_ID = "local_pd_notebook"  # XXX
+WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK", "http://localhost:5000")
 TOKEN_FILENAME = "Placement.token"
+
+_log = logging.getLogger(__name__)
 
 
 def write_token(token_filename: str, token_contents: bytes):
@@ -43,13 +51,134 @@ def token_stat(token_filename: str):
         return None
 
 
+class DeviceClientError(Exception):
+    """Errors while trying to the device flow."""
+
+
+class DeviceClientUnexpectedOutput(DeviceClientError):
+    """Server responded with something unexpected."""
+
+
+class DeviceClientTimedOut(DeviceClientError):
+    """The device flow session expired."""
+
+
+class DeviceClientRequestNotInProgress(DeviceClientError):
+    """No device flow session is in progress."""
+
+
+class DeviceClientAccessDenied(DeviceClientError):
+    """The user denied the token request."""
+
+
+class DeviceClient:
+    GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+    REQUEST_ENDPOINT = "/auth/device_authorization"
+
+    _log = _log.getChild("DeviceClient")
+
+    def __init__(self, webapp_server: str, client_id: str):
+        self.request_url = f"{webapp_server}{self.REQUEST_ENDPOINT}"
+        self.client_id = client_id
+        self.device_code = ""
+        self.expires_in = 0
+        self.interval = 0
+        self.user_code = ""
+        self.verification_uri = ""
+        self.verification_uri_complete = ""
+        self.request_in_progress = False
+
+    def make_request(self) -> "DeviceClient":
+        response = requests.post(
+            url=self.request_url,
+            data={"client_id": self.client_id},
+        )
+        # TODO Handle errors
+        response.raise_for_status()
+        try:
+            rj = response.json()
+        except requests.exceptions.JSONDecodeError as err:
+            raise DeviceClientUnexpectedOutput("Invalid JSON: %s" % err)
+
+        try:
+            self.device_code = rj["device_code"]
+            self.expires_in = rj["expires_in"]
+            self.interval = rj.get("interval", 5)
+            self.user_code = rj["user_code"]
+            self.verification_uri = rj["verification_uri"]
+            self.verification_uri_complete = rj.get("verification_uri_complete", "")
+        except KeyError as err:
+            raise DeviceClientUnexpectedOutput("Server response missing %s" % err)
+        self.request_in_progress = True
+        return self
+
+    def poll_for_token(self) -> bytes:
+        if not self.request_in_progress:
+            raise DeviceClientRequestNotInProgress()
+
+        interval = self.interval
+        expires_at = time.time() + float(self.expires_in)
+        while time.time() < expires_at:
+            response = requests.post(
+                url=self.request_url,
+                data={
+                    "client_id": self.client_id,
+                    "grant_type": self.GRANT_TYPE,
+                    "device_code": self.device_code,
+                }
+            )
+            try:
+                response_json = response.json()
+            except requests.exceptions.JSONDecodeError as err:
+                raise DeviceClientUnexpectedOutput("Invalid JSON: %s" % err)
+
+            if response.status_code == 400:
+                try:
+                    error: str = response_json["error"]
+                except KeyError:
+                    raise DeviceClientUnexpectedOutput("Unknown error from server")
+                if error == "authorization_pending":
+                    time.sleep(interval)
+                    continue
+                if error == "slow_down":
+                    interval += 1
+                    self._log.debug("Received slow_down; interval set to %d", interval)
+                    time.sleep(interval)
+                    continue
+                if error == "access_denied":
+                    raise DeviceClientAccessDenied()
+                if error == "expired_token":
+                    raise DeviceClientTimedOut("Server responds device code expired")
+
+                raise DeviceClientUnexpectedOutput("Server responds with unexpected error %s" % error)
+
+            elif response.status_code == 200:
+                try:
+                    access_token = response_json["access_token"]
+                    token_type = response_json["token_type"]
+                    # expires_in = response_json.get("expires_in", None)
+                except KeyError as err:
+                    raise DeviceClientUnexpectedOutput("Response missing %s" % err)
+                if token_type.lower() != "placement":
+                    raise DeviceClientUnexpectedOutput("Unexpected token type %s" % token_type)
+                try:
+                    access_token_b = access_token.encode()
+                except (TypeError, AttributeError, UnicodeEncodeError) as err:
+                    raise DeviceClientUnexpectedOutput("Error encoding access token: %r" % err)
+                return access_token_b
+            
+            time.sleep(interval)
+
+        raise DeviceClientTimedOut("Device code expired")
+
+
 class Widgets:
     def __init__(self):
         maybe_tz = os.environ.get("TIMEZONE")
         if maybe_tz:
-            self.tz = dateutil.tz.gettz(maybe_tz)
+            self.tz = dateutil.tz.gettz(maybe_tz)  # type: ignore
         else:
-            self.tz = dateutil.tz.gettz()
+            self.tz = dateutil.tz.gettz()  # type: ignore
 
         # The description on the FileUpload widget doesn't fit the default
         # layout so set up one of our own.  See
