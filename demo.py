@@ -1,15 +1,29 @@
 import datetime
 import os
 import pathlib
+import sys
+import time
+import typing as t
 
 import dateutil
 import htcondor2
+import requests
 import ipywidgets as widgets
 from IPython.display import display
 
 
-
+DEVICE_CLIENT_ID = "local_pd_notebook"  # XXX
+DEVICE_REQUEST_ENDPOINT = "/auth/device_authorization"
+WEBAPP_SERVER = "http://localhost:5000"  # XXX
 TOKEN_FILENAME = "Placement.token"
+_DEBUG = True
+
+
+def _debug_print(*args, **kwargs):
+    if _DEBUG:
+        kwargs["file"] = sys.stderr
+        return print(*args, **kwargs)
+    return
 
 
 def write_token(token_filename: str, token_contents: bytes):
@@ -43,13 +57,92 @@ def token_stat(token_filename: str):
         return None
 
 
+# TODO Ehhhh
+class PollForTokenResult(t.NamedTuple):
+    error: t.Optional[str]
+    token: t.Optional[str]
+
+
+def device_poll_for_token(
+        url: str,
+        client_id: str,
+        device_code: str,
+        interval: int,
+        expires_in: int,
+    ) -> PollForTokenResult:
+
+    expires_at = time.time() + float(expires_in)
+    while time.time() < expires_at:
+        response = requests.post(
+            url=url,
+            data={
+                "client_id": client_id,
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": device_code,
+            }
+        )
+        try:
+            response_json = response.json()
+        except requests.exceptions.JSONDecodeError as err:
+            _debug_print(str(err))
+            return PollForTokenResult("unexpected_output", None)
+
+        if response.status_code == 400:
+            try:
+                error: str = response_json["error"]
+            except KeyError:
+                return PollForTokenResult("unexpected_output", None)
+            if error == "authorization_pending":
+                time.sleep(interval)
+                continue
+            if error == "slow_down":
+                interval += 1
+                _debug_print("Received slow_down; interval set to %d" % interval)
+                time.sleep(interval)
+                continue
+            if error == "access_denied":
+                return PollForTokenResult("access_denied", None)
+            if error == "expired_token":
+                return PollForTokenResult("timed_out", None)
+
+            _debug_print("Unexpected error %s" % error)
+            return PollForTokenResult("unexpected_output", None)
+
+        elif response.status_code == 200:
+            try:
+                access_token = response_json["access_token"]
+                token_type = response_json["token_type"]
+                expires_in = response_json.get("expires_in", None)
+            except KeyError as err:
+                _debug_print("Response missing %s: %r" % (err, response_json))
+                return PollForTokenResult("unexpected_output", None)
+            if token_type.lower() != "placement":
+                _debug_print("Unexpected token type %s" % token_type)
+                return PollForTokenResult("unexpected_output", None)
+            return PollForTokenResult(None, access_token)
+        
+        time.sleep(interval)
+
+    return PollForTokenResult("timed_out", None)
+
+
+def device_request(url: str, client_id: str):
+    response = requests.post(
+        url=url,
+        data={"client_id": client_id},
+    )
+    # TODO Handle errors
+    response.raise_for_status()
+    return response.json()
+
+
 class Widgets:
     def __init__(self):
         maybe_tz = os.environ.get("TIMEZONE")
         if maybe_tz:
-            self.tz = dateutil.tz.gettz(maybe_tz)
+            self.tz = dateutil.tz.gettz(maybe_tz)  # type: ignore
         else:
-            self.tz = dateutil.tz.gettz()
+            self.tz = dateutil.tz.gettz()  # type: ignore
 
         # The description on the FileUpload widget doesn't fit the default
         # layout so set up one of our own.  See
