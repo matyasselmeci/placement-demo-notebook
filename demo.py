@@ -208,12 +208,12 @@ class DeviceWidgets:
         # The description on the Button widget doesn't fit the default
         # layout so set up one of our own.  See
         # https://ipywidgets.readthedocs.io/en/latest/examples/Widget%20Layout.html#examples
-        # items_layout = widgets.Layout(width="auto")
+        items_layout = widgets.Layout(width="auto")
         box_layout = widgets.Layout(
             display="flex", flex_flow="column", align_items="stretch", width="50%"
         )
         # A button for starting the token request
-        self.start_token_request_button = widgets.Button(description="Request Token")
+        self.start_token_request_button = widgets.Button(description="Request Token", button_style="primary", layout=items_layout)
         self.start_token_request_button.on_click(
             lambda button: self.on_request_token_click(button)
         )
