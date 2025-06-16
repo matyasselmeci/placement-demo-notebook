@@ -205,13 +205,30 @@ class DeviceWidgets:
         else:
             self.tz = dateutil.tz.gettz()  # type: ignore
 
+        # The description on the Button widget doesn't fit the default
+        # layout so set up one of our own.  See
+        # https://ipywidgets.readthedocs.io/en/latest/examples/Widget%20Layout.html#examples
+        # items_layout = widgets.Layout(width="auto")
+        box_layout = widgets.Layout(
+            display="flex", flex_flow="column", align_items="stretch", width="50%"
+        )
         # A button for starting the token request
         self.start_token_request_button = widgets.Button(description="Request Token")
-        self.start_token_request_button.on_click(lambda button: self.on_request_token_click(button))
+        self.start_token_request_button.on_click(
+            lambda button: self.on_request_token_click(button)
+        )
         # A label that will contain the link to the token request page and the code to type in.
         self.user_instructions_html = widgets.HTML()
         # A label that will contain the message status
         self.status_html: widgets.HTML = widgets.HTML(value="Request not started.")
+        self.box = widgets.Box(
+            [
+                self.start_token_request_button,
+                self.user_instructions_html,
+                self.status_html,
+            ],
+            layout=box_layout,
+        )
 
         self.client = DeviceClient(WEBAPP_SERVER, DEVICE_CLIENT_ID)
 
@@ -225,41 +242,51 @@ class DeviceWidgets:
             )
             return
         button.description = "Token request in progress"
-        link = html.escape(self.client.verification_uri)
-        link_complete = html.escape(self.client.verification_uri_complete)
-        code = html.escape(self.client.user_code)
-        self.user_instructions_html.value = (
-            f'Please go to the following link: <u><a href="{link_complete}" target="_blank">{link}</a></u>, '
-            f"and type in this code: <strong><code>{code}</code></strong>"
-        )
-        access_token_b = None
+        button.disabled = True
         try:
-            while time.time() < self.client.expires_at:
-                expires_in = self.client.expires_at - time.time()
-                expires_minutes = int(expires_in) // 60
-                expires_seconds = int(expires_in) % 60
-                self.status_html.value = "Request in progress, will expire in %d:%02d" % (
-                    expires_minutes,
-                    expires_seconds,
-                )
-                try:
-                    access_token_b = self.client.poll_for_token()
-                except DeviceClientError as err:
-                    self.status_html.value = "Request failed:<br>%s" % html.escape(str(err))
-                    break
-                if access_token_b is not None:
-                    break
-                time.sleep(self.client.interval)
-        except KeyboardInterrupt:
-            self.status_html.value = "Request cancelled"
-            button.description = "Request Token"
-            raise
+            link = html.escape(self.client.verification_uri)
+            link_complete = html.escape(self.client.verification_uri_complete)
+            code = html.escape(self.client.user_code)
+            self.user_instructions_html.value = (
+                f'Please go to the following link: <u><a href="{link_complete}" target="_blank">{link}</a></u>, '
+                f"and type in this code: <strong><code>{code}</code></strong>"
+            )
+            access_token_b = None
+            try:
+                while time.time() < self.client.expires_at:
+                    expires_in = self.client.expires_at - time.time()
+                    expires_minutes = int(expires_in) // 60
+                    expires_seconds = int(expires_in) % 60
+                    self.status_html.value = (
+                        "Request in progress, will expire in %d:%02d"
+                        % (
+                            expires_minutes,
+                            expires_seconds,
+                        )
+                    )
+                    try:
+                        access_token_b = self.client.poll_for_token()
+                    except DeviceClientError as err:
+                        self.status_html.value = "Request failed:<br>%s" % html.escape(
+                            str(err)
+                        )
+                        break
+                    if access_token_b is not None:
+                        break
+                    time.sleep(self.client.interval)
+            except KeyboardInterrupt:
+                self.status_html.value = "Request cancelled"
+                raise
 
-        button.description = "Request Token"
-        if access_token_b:
-            self.status_html.value = "Request successful"
-            write_token(TOKEN_FILENAME, access_token_b)
-            self.status_html.value = "Request successful, token installed"
+            if access_token_b:
+                self.status_html.value = "Request successful"
+                write_token(TOKEN_FILENAME, access_token_b)
+                self.status_html.value = "Request successful, token installed"
+                display(self.status_html)  # Force update?
+        finally:
+            button.description = "Request Token"
+            button.disabled = False
+            display(button)  # Force update?
 
     def display_widgets(self):
         display(self.start_token_request_button)
