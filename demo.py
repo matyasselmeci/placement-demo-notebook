@@ -206,11 +206,11 @@ class DeviceWidgets:
             self.tz = dateutil.tz.gettz()  # type: ignore
 
         # A button for starting the token request
-        self.start_token_request_button = widgets.Button("Request Token")
+        self.start_token_request_button = widgets.Button(description="Request Token")
         # A label that will contain the link to the token request page and the code to type in.
         self.user_instructions_html = widgets.HTML()
         # A label that will contain the message status
-        self.status_html: widgets.HTML = widgets.HTML("Request not started.")
+        self.status_html: widgets.HTML = widgets.HTML(value="Request not started.")
 
         self.client = DeviceClient(WEBAPP_SERVER, DEVICE_CLIENT_ID)
 
