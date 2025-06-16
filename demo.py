@@ -229,7 +229,7 @@ class DeviceWidgets:
         code = html.escape(self.client.user_code)
         self.user_instructions_html.value = (
             f'Please go to the following link: <a href="{link_complete}" target="_blank">{link}</a><br>'
-            f"and type in this code: <code>{code}</code>"
+            f"and type in this code: <strong><code>{code}</code></strong>"
         )
         access_token_b = None
         while time.time() < self.client.expires_at:
@@ -245,8 +245,9 @@ class DeviceWidgets:
             except DeviceClientError as err:
                 self.status_html.value = "Request failed:<br>%s" % html.escape(str(err))
                 break
-            if access_token_b is None:
-                time.sleep(self.client.interval)
+            if access_token_b is not None:
+                break
+            time.sleep(self.client.interval)
         if access_token_b:
             self.status_html.value = "Request successful"
             # TODO install token
