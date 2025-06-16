@@ -10,6 +10,7 @@ import typing as t
 import dateutil
 import htcondor2
 import requests
+import urllib3
 import ipywidgets as widgets
 from IPython.display import display
 
@@ -90,11 +91,15 @@ class DeviceClient:
         self.request_in_progress = False
 
     def make_request(self) -> "DeviceClient":
-        response = requests.post(
-            url=self.request_url,
-            data={"client_id": self.client_id},
-        )
-        # TODO Handle errors
+        try:
+            response = requests.post(
+                url=self.request_url,
+                data={"client_id": self.client_id},
+            )
+        except (OSError, urllib3.exceptions.HTTPError) as err:
+            raise DeviceClientError(
+                "Initial request failed to connect to server: %s" % err
+            ) from err
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as err:
