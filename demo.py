@@ -207,6 +207,7 @@ class DeviceWidgets:
 
         # A button for starting the token request
         self.start_token_request_button = widgets.Button(description="Request Token")
+        self.start_token_request_button.on_click(lambda button: self.on_request_token_click(button))
         # A label that will contain the link to the token request page and the code to type in.
         self.user_instructions_html = widgets.HTML()
         # A label that will contain the message status
