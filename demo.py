@@ -96,7 +96,7 @@ class DeviceClient:
                 url=self.request_url,
                 data={"client_id": self.client_id},
             )
-        except urllib3.exceptions.HTTPError as err:
+        except (OSError, urllib3.exceptions.HTTPError) as err:
             raise DeviceClientError(
                 "Initial request failed to connect to server: %s" % err
             ) from err
