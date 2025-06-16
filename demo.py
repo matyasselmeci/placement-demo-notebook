@@ -14,7 +14,7 @@ import ipywidgets as widgets
 from IPython.display import display
 
 
-DEVICE_CLIENT_ID = "local_pd_notebook"  # XXX
+DEVICE_CLIENT_ID = os.environ.get("DEVICE_CLIENT_ID", "local_pd_notebook")  # XXX
 WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK", "http://localhost:5000")
 TOKEN_FILENAME = "Placement.token"
 
@@ -208,23 +208,27 @@ class DeviceWidgets:
         # The description on the Button widget doesn't fit the default
         # layout so set up one of our own.  See
         # https://ipywidgets.readthedocs.io/en/latest/examples/Widget%20Layout.html#examples
-        # items_layout = widgets.Layout(width="auto")
+        items_layout = widgets.Layout(width="auto")
         box_layout = widgets.Layout(
             display="flex", flex_flow="column", align_items="stretch", width="50%"
         )
         # A button for starting the token request
-        self.start_token_request_button = widgets.Button(description="Request Token")
+        self.start_token_request_button = widgets.Button(
+            description="Request Token", button_style="primary", layout=items_layout
+        )
         self.start_token_request_button.on_click(
             lambda button: self.on_request_token_click(button)
         )
         # A label that will contain the link to the token request page and the code to type in.
-        self.user_instructions_html = widgets.HTML()
+        self.user_instructions_html = widgets.HTML(
+            "Click the button to start the token request"
+        )
         # A label that will contain the message status
-        self.status_html: widgets.HTML = widgets.HTML(value="Request not started.")
+        self.status_html: widgets.HTML = widgets.HTML()
         self.box = widgets.Box(
             [
-                self.start_token_request_button,
                 self.user_instructions_html,
+                self.start_token_request_button,
                 self.status_html,
             ],
             layout=box_layout,
@@ -240,8 +244,11 @@ class DeviceWidgets:
                 "Initial request failed. The error message was:<br>%s"
                 % html.escape(str(err))
             )
+            self.user_instructions_html.value = (
+                "The token request failed; please try again."
+            )
             return
-        button.description = "Token request in progress"
+        button.description = "Token request in progress, please wait"
         button.disabled = True
         try:
             link = html.escape(self.client.verification_uri)
