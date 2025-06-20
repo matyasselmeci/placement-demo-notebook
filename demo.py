@@ -300,7 +300,7 @@ class DeviceWidgets:
         display(self.status_html)
 
 
-class Widgets:
+class TokenFileUploadWidgets:
     def __init__(self):
         maybe_tz = os.environ.get("TIMEZONE")
         if maybe_tz:
@@ -382,6 +382,9 @@ def setup():
 
 
 class AP:
+    """
+    A friendlier class for interacting with an AP (mostly the schedd).
+    """
     def __init__(self, collector_host=None, schedd_host=None):
         if collector_host:
             self.collector = htcondor2.Collector(collector_host)
