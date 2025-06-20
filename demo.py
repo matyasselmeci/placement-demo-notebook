@@ -91,12 +91,11 @@ class DeviceClient:
         self.request_in_progress = False
 
     def make_request(self) -> "DeviceClient":
-        response = requests.post(
-            url=self.request_url,
-            data={"client_id": self.client_id},
-        )
-        # TODO Handle errors
         try:
+            response = requests.post(
+                url=self.request_url,
+                data={"client_id": self.client_id},
+            )
             response.raise_for_status()
         except requests.exceptions.HTTPError as err:
             msg = "Initial request resulted in %s" % err
