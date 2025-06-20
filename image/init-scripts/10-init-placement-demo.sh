@@ -17,5 +17,7 @@ then
             .. &&
         sed -i -e "s|PLACEMENT_WEBAPP_LINK|${PLACEMENT_WEBAPP_LINK:-https://demo-ap.chtc.wisc.edu}|" demo.ipynb
     )
+    export PLACEMENT_WEBAPP_LINK
+    export DEVICE_CLIENT_ID
 fi
 
