@@ -27,7 +27,7 @@ def write_token(token_filename: str, token_contents: bytes):
     Write the given bytes to a token file in the condor tokens dir.
 
     token_filename: The name of the file (without directory) to create,
-        under the tokens directory.  (Should end in '.tkn')
+        under the tokens directory.  (Should end in '.token')
 
     token_contents: The bytes to write into the token file.
     """
@@ -261,7 +261,7 @@ class DeviceWidgets:
             code = html.escape(self.client.user_code)
             self.user_instructions_html.value = (
                 f'Please go to the following link: <u><a href="{link_complete}" target="_blank">{link}</a></u>, '
-                f"and type in this code: <strong><code>{code}</code></strong>"
+                f"and type in this code: <strong><kbd>{code}</kbd></strong>"
             )
             access_token_b = None
             try:
@@ -296,7 +296,7 @@ class DeviceWidgets:
                 self.status_html.value = "Request successful, token installed"
                 display(self.status_html)  # Force update?
         finally:
-            button.description = "Request Token"
+            button.description = "Click to Request Token"
             button.disabled = False
             display(button)  # Force update?
 
