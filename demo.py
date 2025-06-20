@@ -306,7 +306,7 @@ class DeviceWidgets:
         display(self.status_html)
 
 
-class Widgets:
+class TokenFileUploadWidgets:
     def __init__(self):
         maybe_tz = os.environ.get("TIMEZONE")
         if maybe_tz:
