@@ -8,13 +8,14 @@ import time
 import typing as t
 
 import dateutil
+import classad2
 import htcondor2
 import requests
 import ipywidgets as widgets
 from IPython.display import display
 
 
-DEVICE_CLIENT_ID = "local_pd_notebook"  # XXX
+DEVICE_CLIENT_ID = os.environ.get("DEVICE_CLIENT_ID", "placement_demo_notebook")
 WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK", "http://localhost:5000")
 TOKEN_FILENAME = "Placement.token"
 
@@ -26,7 +27,7 @@ def write_token(token_filename: str, token_contents: bytes):
     Write the given bytes to a token file in the condor tokens dir.
 
     token_filename: The name of the file (without directory) to create,
-        under the tokens directory.  (Should end in '.tkn')
+        under the tokens directory.  (Should end in '.token')
 
     token_contents: The bytes to write into the token file.
     """
@@ -213,18 +214,20 @@ class DeviceWidgets:
             display="flex", flex_flow="column", align_items="stretch", width="50%"
         )
         # A button for starting the token request
-        self.start_token_request_button = widgets.Button(description="Request Token", button_style="primary", layout=items_layout)
+        self.start_token_request_button = widgets.Button(
+            description="Request Token", button_style="primary", layout=items_layout
+        )
         self.start_token_request_button.on_click(
             lambda button: self.on_request_token_click(button)
         )
         # A label that will contain the link to the token request page and the code to type in.
-        self.user_instructions_html = widgets.HTML()
+        self.user_instructions_html = widgets.HTML("Click the button to start the token request")
         # A label that will contain the message status
-        self.status_html: widgets.HTML = widgets.HTML(value="Request not started.")
+        self.status_html: widgets.HTML = widgets.HTML()
         self.box = widgets.Box(
             [
-                self.start_token_request_button,
                 self.user_instructions_html,
+                self.start_token_request_button,
                 self.status_html,
             ],
             layout=box_layout,
@@ -240,8 +243,11 @@ class DeviceWidgets:
                 "Initial request failed. The error message was:<br>%s"
                 % html.escape(str(err))
             )
+            self.user_instructions_html.value = (
+                "The token request failed; please try again."
+            )
             return
-        button.description = "Token request in progress"
+        button.description = "Token request in progress, please wait"
         button.disabled = True
         try:
             link = html.escape(self.client.verification_uri)
@@ -249,7 +255,7 @@ class DeviceWidgets:
             code = html.escape(self.client.user_code)
             self.user_instructions_html.value = (
                 f'Please go to the following link: <u><a href="{link_complete}" target="_blank">{link}</a></u>, '
-                f"and type in this code: <strong><code>{code}</code></strong>"
+                f"and type in this code: <strong><kbd>{code}</kbd></strong>"
             )
             access_token_b = None
             try:
@@ -284,7 +290,7 @@ class DeviceWidgets:
                 self.status_html.value = "Request successful, token installed"
                 display(self.status_html)  # Force update?
         finally:
-            button.description = "Request Token"
+            button.description = "Click to Request Token"
             button.disabled = False
             display(button)  # Force update?
 
@@ -375,20 +381,43 @@ def setup():
     wid.display_widgets()
 
 
-def print_placement_status(placement: htcondor2.SubmitResult, schedd: htcondor2.Schedd):
-    """
-    Print the status of jobs in the cluster from a placement (SubmitResult).
-    """
-    query = schedd.query(f"ClusterId == {placement.cluster()}", ["JobStatus"])
-    for code, name in [
-        (1, "idle"),
-        (2, "running"),
-        (3, "removed"),
-        (4, "completed"),
-        (5, "held"),
-    ]:
-        num_in_status = len([j for j in query if j["JobStatus"] == code])
-        if num_in_status > 1:
-            print(f"{num_in_status} jobs are {name}.")
-        elif num_in_status == 1:
-            print(f"1 job is {name}.")
+class AP:
+    def __init__(self, collector_host=None, schedd_host=None):
+        if collector_host:
+            self.collector = htcondor2.Collector(collector_host)
+        else:
+            self.collector = htcondor2.Collector()
+        schedd_host = schedd_host or htcondor2.param["SCHEDD_HOST"]
+        schedd_ad = self.collector.locate(
+            htcondor2.DaemonType.Schedd, schedd_host
+        )
+        self.schedd = htcondor2.Schedd(schedd_ad)
+
+    def place(self, submit_object: htcondor2.Submit) -> htcondor2.SubmitResult:
+        placement = self.schedd.submit(submit_object, spool=True)
+        self.schedd.spool(placement)
+        return placement
+    
+    def query(self, constraint: t.Union[str, classad2.ExprTree] = "True", attributes: t.Optional[list[str]] = None):
+        return self.schedd.query(constraint = constraint, projection=attributes or [])
+
+    def get_job_count(self, constraint: t.Union[str, classad2.ExprTree] = "True"):
+        return len(self.query(constraint=constraint, attributes=["ClusterId", "ProcId"]))
+
+    def print_placement_status(self, placement: htcondor2.SubmitResult):
+        """
+        Print the status of jobs in the cluster from a placement (SubmitResult).
+        """
+        query = self.schedd.query(f"ClusterId == {placement.cluster()}", ["JobStatus"])
+        for code, name in [
+            (1, "idle"),
+            (2, "running"),
+            (3, "removed"),
+            (4, "completed"),
+            (5, "held"),
+        ]:
+            num_in_status = len([j for j in query if j["JobStatus"] == code])
+            if num_in_status > 1:
+                print(f"{num_in_status} jobs are {name}.")
+            elif num_in_status == 1:
+                print(f"1 job is {name}.")
