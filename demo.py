@@ -15,8 +15,8 @@ import ipywidgets as widgets
 from IPython.display import display
 
 
-DEVICE_CLIENT_ID = os.environ.get("DEVICE_CLIENT_ID", "local_pd_notebook")  # XXX
-WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK", "http://localhost:5000")
+DEVICE_CLIENT_ID = os.environ.get("DEVICE_CLIENT_ID") or "placement_demo_notebook"
+WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK") or "http://localhost:5000"
 TOKEN_FILENAME = "Placement.token"
 
 _log = logging.getLogger(__name__)
