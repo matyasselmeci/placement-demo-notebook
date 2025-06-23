@@ -510,7 +510,7 @@ class Placement:
         if self.status_last_update < 0.1:  # it's a float; don't try equality
             print("Status unknown")
             return
-        update_datetime = datetime.fromtimestamp(self.status_last_update, tz=self.tz)
+        update_datetime = datetime.datetime.fromtimestamp(self.status_last_update, tz=self.tz)
         update_time_str = update_datetime.strftime("%T")
         print(f"As of {update_time_str}:")
         for status_name, num_in_status in self.status.items():
