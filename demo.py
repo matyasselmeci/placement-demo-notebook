@@ -428,7 +428,7 @@ def setup():
 class Placement:
     _log = _log.getChild("Placement")
 
-    MIN_DELAY_BETWEEN_UPDATES = 10.0  # seconds
+    MIN_DELAY_BETWEEN_UPDATES = 5.0  # seconds
     # ^^ maybe I should base this on DCDC?
     MAX_STATUS_WAIT = 60.0  # seconds
     HOLD_REASON_CODE_SPOOLING_INPUT = 16
@@ -523,10 +523,12 @@ class Placement:
                 + self.status["transferring_input"]
                 + self.status["transferring_output"]
             )
+            print("---------")
+            self.print_status()
             if jobs_in_progress == 0:
-                self.print_status()
                 print("Done waiting.")
-            time.sleep(MIN_DELAY_BETWEEN_UPDATES)
+                return
+            time.sleep(self.MIN_DELAY_BETWEEN_UPDATES)
 
     def retrieve_results(self):
         return self.ap.schedd.retrieve(job_spec=self.constraint)
