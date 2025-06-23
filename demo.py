@@ -264,8 +264,8 @@ class DeviceWidgets:
             link_complete = html.escape(self.client.verification_uri_complete)
             code = html.escape(self.client.user_code)
             self.user_instructions_html.value = (
-                f'Please go to the following link: <u><a href="{link_complete}" target="_blank">{link}</a></u>, '
-                f"and type in this code: <strong><kbd>{code}</kbd></strong>"
+                f'<p class="fs-5">Please go to the following link: <u><a href="{link_complete}" target="_blank">{link}</a></u>, '
+                f"and type in this code: <strong><kbd>{code}</kbd></strong></p>"
             )
             access_token_b = None
             try:
