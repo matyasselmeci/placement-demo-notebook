@@ -8,6 +8,7 @@ import time
 import typing as t
 
 import dateutil
+import classad2
 import htcondor2
 import requests
 import urllib3
@@ -391,20 +392,54 @@ def setup():
     wid.display_widgets()
 
 
-def print_placement_status(placement: htcondor2.SubmitResult, schedd: htcondor2.Schedd):
-    """
-    Print the status of jobs in the cluster from a placement (SubmitResult).
-    """
-    query = schedd.query(f"ClusterId == {placement.cluster()}", ["JobStatus"])
-    for code, name in [
-        (1, "idle"),
-        (2, "running"),
-        (3, "removed"),
-        (4, "completed"),
-        (5, "held"),
-    ]:
-        num_in_status = len([j for j in query if j["JobStatus"] == code])
-        if num_in_status > 1:
-            print(f"{num_in_status} jobs are {name}.")
-        elif num_in_status == 1:
-            print(f"1 job is {name}.")
+class AP:
+    def __init__(self, collector_host=None, schedd_host=None):
+        if collector_host:
+            self.collector = htcondor2.Collector(collector_host)
+        else:
+            self.collector = htcondor2.Collector()
+        schedd_host = schedd_host or htcondor2.param["SCHEDD_HOST"]
+        schedd_ad = self.collector.locate(htcondor2.DaemonType.Schedd, schedd_host)
+        self.schedd = htcondor2.Schedd(schedd_ad)
+
+    def place(self, submit_object: htcondor2.Submit) -> htcondor2.SubmitResult:
+        placement = self.schedd.submit(submit_object, spool=True)
+        self.schedd.spool(placement)
+        return placement
+
+    def query(
+        self,
+        constraint: t.Union[str, classad2.ExprTree] = "True",
+        attributes: t.Optional[list[str]] = None,
+    ):
+        return self.schedd.query(constraint=constraint, projection=attributes or [])
+
+    def get_job_count(self, constraint: t.Union[str, classad2.ExprTree] = "True"):
+        return len(
+            self.query(constraint=constraint, attributes=["ClusterId", "ProcId"])
+        )
+
+    def print_placement_status(self, placement: htcondor2.SubmitResult):
+        """
+        Print the status of jobs in the cluster from a placement (SubmitResult).
+        """
+        query = self.schedd.query(f"ClusterId == {placement.cluster()}", ["JobStatus"])
+        for code, name in [
+            (1, "idle"),
+            (2, "running"),
+            (3, "removed"),
+            (4, "completed"),
+            (5, "held"),
+        ]:
+            num_in_status = len([j for j in query if j["JobStatus"] == code])
+            if num_in_status > 1:
+                print(f"{num_in_status} jobs are currently {name}.")
+            elif num_in_status == 1:
+                print(f"1 job is currently {name}.")
+
+    def retrieve(self, constraint: t.Union[str, classad2.ExprTree]):
+        return self.schedd.retrieve(job_spec=constraint)
+
+
+# Expose this to the demo notebook
+Submit = htcondor2.Submit
