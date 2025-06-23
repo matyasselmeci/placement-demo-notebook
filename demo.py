@@ -432,6 +432,12 @@ class Placement:
     # ^^ maybe I should base this on DCDC?
     MAX_STATUS_WAIT = 60.0  # seconds
     HOLD_REASON_CODE_SPOOLING_INPUT = 16
+    IN_PROGRESS_STATUSES = [
+        "idle",
+        "running",
+        "transferring_input",
+        "transferring_output",
+    ]
 
     def __init__(self, submit_result: htcondor2.SubmitResult, ap: "AP"):
         self.submit_result = submit_result
@@ -496,12 +502,17 @@ class Placement:
         Print the status of jobs in the cluster from this placement.
         """
         self._update_status()
-        for name, num_in_status in self.status.items():
-            space_name = name.replace("_", " ")
+        if self.status_last_update < 0.1:  # it's a float; don't try equality
+            print("Status unknown")
+            return
+        update_time_str = time.strftime("%T", time.localtime(self.status_last_update))
+        print(f"As of {update_time_str}:")
+        for status_name, num_in_status in self.status.items():
+            space_name = status_name.replace("_", " ")
             if num_in_status > 1:
-                print(f"{num_in_status} jobs are currently {space_name}.")
+                print(f"{num_in_status} jobs are {space_name}.")
             elif num_in_status == 1:
-                print(f"1 job is currently {space_name}.")
+                print(f"1 job is {space_name}.")
 
     def wait_for_completion(self):
         """
@@ -515,23 +526,21 @@ class Placement:
         """
         print("Waiting for completion of jobs")
         while True:
-            self._update_status()
+            update_success = self._update_status()
             now = time.time()
             time_since_last_update = self.status_last_update - now
             if time_since_last_update > self.MAX_STATUS_WAIT:
                 print(f"No update received in {int(time_since_last_update)} seconds.")
                 print(f"Aborting wait; please investigate.")
-            jobs_in_progress = (
-                self.status["idle"]
-                + self.status["running"]
-                + self.status["transferring_input"]
-                + self.status["transferring_output"]
-            )
-            print("---------")
-            self.print_status()
-            if jobs_in_progress == 0:
-                print("Done waiting.")
-                return
+            if update_success:
+                jobs_in_progress = 0
+                for status_name in self.IN_PROGRESS_STATUSES:
+                    jobs_in_progress += self.status[status_name]
+                print("---------")
+                self.print_status()
+                if jobs_in_progress == 0:
+                    print("Done waiting.")
+                    return
             time.sleep(self.MIN_DELAY_BETWEEN_UPDATES)
 
     def retrieve_results(self):
