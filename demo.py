@@ -136,16 +136,20 @@ class DeviceClient:
     def poll_for_token(self) -> t.Optional[bytes]:
         if not self.request_in_progress:
             raise DeviceClientRequestNotInProgress()
-        response = requests.post(
-            url=self.request_url,
-            data={
-                "client_id": self.client_id,
-                "grant_type": self.GRANT_TYPE,
-                "device_code": self.device_code,
-            },
-        )
         try:
+            response = requests.post(
+                url=self.request_url,
+                data={
+                    "client_id": self.client_id,
+                    "grant_type": self.GRANT_TYPE,
+                    "device_code": self.device_code,
+                },
+            )
             response_json = response.json()
+        except (OSError, urllib3.exceptions.HTTPError) as err:
+            raise DeviceClientError(
+                "Lost connection to server: %s" % err
+            ) from err
         except requests.exceptions.JSONDecodeError as err:
             raise DeviceClientUnexpectedOutput("Invalid JSON: %s" % err)
 
