@@ -22,6 +22,11 @@ TOKEN_FILENAME = "Placement.token"
 
 _log = logging.getLogger(__name__)
 
+#
+#
+# Utils for installing the token once obtained
+#
+#
 
 def write_token(token_filename: str, token_contents: bytes):
     """
@@ -52,6 +57,13 @@ def token_stat(token_filename: str):
         return token_dest.stat()
     except OSError:
         return None
+
+
+#
+#
+# Code for obtaining a token via OAuth2 Device Flow
+#
+#
 
 
 class DeviceClientError(Exception):
@@ -206,6 +218,11 @@ class DeviceClient:
 
         raise DeviceClientTimedOut("Device code expired")
 
+#
+#
+# Widgets for interacting with the Device Flow client
+#
+#
 
 class DeviceWidgets:
     def __init__(self):
@@ -231,7 +248,7 @@ class DeviceWidgets:
         )
         # A label that will contain the link to the token request page and the code to type in.
         self.user_instructions_html = widgets.HTML(
-            "Click the button to start the token request"
+            ""
         )
         # A label that will contain the message status
         self.status_html: widgets.HTML = widgets.HTML()
@@ -299,9 +316,13 @@ class DeviceWidgets:
                 self.status_html.value = "Request successful"
                 write_token(TOKEN_FILENAME, access_token_b)
                 self.status_html.value = "Request successful, token installed"
+                self.user_instructions_html.value = (
+                    "You can continue with the rest of the notebook."
+                )
                 display(self.status_html)  # Force update?
+                display(self.user_instructions_html)
         finally:
-            button.description = "Click to Request Token"
+            button.description = "Request Token"
             button.disabled = False
             display(button)  # Force update?
 
@@ -310,6 +331,11 @@ class DeviceWidgets:
         display(self.user_instructions_html)
         display(self.status_html)
 
+#
+#
+# Widgets for uploading a token file
+#
+#
 
 class TokenFileUploadWidgets:
     def __init__(self):
@@ -384,6 +410,12 @@ class TokenFileUploadWidgets:
         display(self.token_box)
 
 
+#
+#
+# Functions and classes for interactive use
+#
+#
+
 def setup():
     """
     Set up the widgets in the demo notebook.
@@ -393,6 +425,9 @@ def setup():
 
 
 class AP:
+    """
+    AP is a class for interacting with a remote Access Point, specifically its SchedD.
+    """
     def __init__(self, collector_host=None, schedd_host=None):
         if collector_host:
             self.collector = htcondor2.Collector(collector_host)
