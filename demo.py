@@ -322,7 +322,7 @@ class DeviceWidgets:
                 display(self.status_html)  # Force update?
                 display(self.user_instructions_html)
         finally:
-            button.description = "Request Token"
+            button.description = "Request Another Token"
             button.disabled = False
             display(button)  # Force update?
 
@@ -424,6 +424,35 @@ def setup():
     wid.display_widgets()
 
 
+class Placement:
+    def __init__(self, submit_result: htcondor2.SubmitResult, ap: "AP"):
+        self.submit_result = submit_result
+        self.cluster = submit_result.cluster()
+        self.constraint = f"ClusterId == {self.cluster}"
+        self.ap = ap
+
+    def print_status(self):
+        """
+        Print the status of jobs in the cluster from this placement.
+        """
+        query = self.ap.query(self.constraint, ["JobStatus"])
+        for code, name in [
+            (1, "idle"),
+            (2, "running"),
+            (3, "removed"),
+            (4, "completed"),
+            (5, "held"),
+        ]:
+            num_in_status = len([j for j in query if j["JobStatus"] == code])
+            if num_in_status > 1:
+                print(f"{num_in_status} jobs are currently {name}.")
+            elif num_in_status == 1:
+                print(f"1 job is currently {name}.")
+
+    def retrieve_results(self):
+        return self.ap.schedd.retrieve(job_spec=self.constraint)
+
+
 class AP:
     """
     AP is a class for interacting with a remote Access Point, specifically its SchedD.
@@ -437,9 +466,10 @@ class AP:
         schedd_ad = self.collector.locate(htcondor2.DaemonType.Schedd, schedd_host)
         self.schedd = htcondor2.Schedd(schedd_ad)
 
-    def place(self, submit_object: htcondor2.Submit) -> htcondor2.SubmitResult:
-        placement = self.schedd.submit(submit_object, spool=True)
-        self.schedd.spool(placement)
+    def place(self, submit_object: htcondor2.Submit) -> Placement:
+        submit_result = self.schedd.submit(submit_object, spool=True)
+        self.schedd.spool(submit_result)
+        placement = Placement(submit_result, ap=self)
         return placement
 
     def query(
@@ -454,27 +484,10 @@ class AP:
             self.query(constraint=constraint, attributes=["ClusterId", "ProcId"])
         )
 
-    def print_placement_status(self, placement: htcondor2.SubmitResult):
-        """
-        Print the status of jobs in the cluster from a placement (SubmitResult).
-        """
-        query = self.schedd.query(f"ClusterId == {placement.cluster()}", ["JobStatus"])
-        for code, name in [
-            (1, "idle"),
-            (2, "running"),
-            (3, "removed"),
-            (4, "completed"),
-            (5, "held"),
-        ]:
-            num_in_status = len([j for j in query if j["JobStatus"] == code])
-            if num_in_status > 1:
-                print(f"{num_in_status} jobs are currently {name}.")
-            elif num_in_status == 1:
-                print(f"1 job is currently {name}.")
 
-    def retrieve(self, constraint: t.Union[str, classad2.ExprTree]):
-        return self.schedd.retrieve(job_spec=constraint)
-
-
-# Expose this to the demo notebook
-Submit = htcondor2.Submit
+def load_job_description(submit_file: t.Union[str, os.PathLike]):
+    """
+    Reads the job description from the given submit file path.
+    """
+    file_path = pathlib.Path(submit_file)
+    return htcondor2.Submit(file_path.read_text())
