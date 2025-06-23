@@ -7,14 +7,13 @@ import sys
 import time
 import typing as t
 
-import dateutil
 import classad2
+import dateutil
 import htcondor2
+import ipywidgets as widgets
 import requests
 import urllib3
-import ipywidgets as widgets
 from IPython.display import display
-
 
 DEVICE_CLIENT_ID = os.environ.get("DEVICE_CLIENT_ID") or "placement_demo_notebook"
 WEBAPP_SERVER = os.environ.get("PLACEMENT_WEBAPP_LINK") or "http://localhost:5000"
@@ -27,6 +26,7 @@ _log = logging.getLogger(__name__)
 # Utils for installing the token once obtained
 #
 #
+
 
 def write_token(token_filename: str, token_contents: bytes):
     """
@@ -160,9 +160,7 @@ class DeviceClient:
             )
             response_json = response.json()
         except (OSError, urllib3.exceptions.HTTPError) as err:
-            raise DeviceClientError(
-                "Lost connection to server: %s" % err
-            ) from err
+            raise DeviceClientError("Lost connection to server: %s" % err) from err
         except requests.exceptions.JSONDecodeError as err:
             raise DeviceClientUnexpectedOutput("Invalid JSON: %s" % err)
 
@@ -218,11 +216,13 @@ class DeviceClient:
 
         raise DeviceClientTimedOut("Device code expired")
 
+
 #
 #
 # Widgets for interacting with the Device Flow client
 #
 #
+
 
 class DeviceWidgets:
     def __init__(self):
@@ -247,9 +247,7 @@ class DeviceWidgets:
             lambda button: self.on_request_token_click(button)
         )
         # A label that will contain the link to the token request page and the code to type in.
-        self.user_instructions_html = widgets.HTML(
-            ""
-        )
+        self.user_instructions_html = widgets.HTML("")
         # A label that will contain the message status
         self.status_html: widgets.HTML = widgets.HTML()
         self.box = widgets.Box(
@@ -331,11 +329,13 @@ class DeviceWidgets:
         display(self.user_instructions_html)
         display(self.status_html)
 
+
 #
 #
 # Widgets for uploading a token file
 #
 #
+
 
 class TokenFileUploadWidgets:
     def __init__(self):
@@ -416,6 +416,7 @@ class TokenFileUploadWidgets:
 #
 #
 
+
 def setup():
     """
     Set up the widgets in the demo notebook.
@@ -425,29 +426,107 @@ def setup():
 
 
 class Placement:
+    _log = _log.getChild("Placement")
+
+    MIN_DELAY_BETWEEN_UPDATES = 10.0  # seconds
+    # ^^ maybe I should base this on DCDC?
+    MAX_STATUS_WAIT = 60.0  # seconds
+    HOLD_REASON_CODE_SPOOLING_INPUT = 16
+
     def __init__(self, submit_result: htcondor2.SubmitResult, ap: "AP"):
         self.submit_result = submit_result
         self.cluster = submit_result.cluster()
+        self.num_procs = submit_result.num_procs()
         self.constraint = f"ClusterId == {self.cluster}"
         self.ap = ap
+        self.status_last_update = 0.0
+        self.status = dict(
+            idle=None,
+            running=None,
+            removed=None,
+            completed=None,
+            held=None,
+            transferring_output=None,
+            suspended=None,
+            transferring_input=None,  # this one is not a real code
+        )
+        self._update_status()
+
+    def _update_status(self) -> bool:
+        """
+        Update self.status() with the latest status of the jobs in this
+        placement.  Since it's a remote placement, we query the schedd instead
+        of using the JobEventLog.  Keep track of the last update time in
+        self.status_last_update; don't update more frequently than
+        MIN_DELAY_BETWEEN_UPDATES.
+
+        Return True if we were able to update, False otherwise.
+        """
+        now = time.time()
+        if now - self.status_last_update < self.MIN_DELAY_BETWEEN_UPDATES:
+            self._log.warning("Not updating status yet -- too soon")
+            return False
+        try:
+            query = self.ap.query(self.constraint, ["JobStatus", "HoldReasonCode"])
+        except htcondor2.HTCondorException:
+            self._log.warning("Unable to update status", exc_info=True)
+            return False
+
+        for code, name in enumerate(self.status.keys(), start=1):
+            self.status[name] = 0
+            for job in query:
+                if name == "transferring_input":
+                    if (
+                        job["JobStatus"] == 5
+                        and job.get("HoldReasonCode")
+                        == self.HOLD_REASON_CODE_SPOOLING_INPUT
+                    ):
+                        self.status[name] += 1
+                else:
+                    self.status[name] += 1
+        self.status_last_update = time.time()
+        return True
 
     def print_status(self):
         """
         Print the status of jobs in the cluster from this placement.
         """
-        query = self.ap.query(self.constraint, ["JobStatus"])
-        for code, name in [
-            (1, "idle"),
-            (2, "running"),
-            (3, "removed"),
-            (4, "completed"),
-            (5, "held"),
-        ]:
-            num_in_status = len([j for j in query if j["JobStatus"] == code])
+        self._update_status()
+        for name, num_in_status in self.status:
+            space_name = name.replace("_", " ")
             if num_in_status > 1:
-                print(f"{num_in_status} jobs are currently {name}.")
+                print(f"{num_in_status} jobs are currently {space_name}.")
             elif num_in_status == 1:
-                print(f"1 job is currently {name}.")
+                print(f"1 job is currently {space_name}.")
+
+    def wait_for_completion(self):
+        """
+        Loop and wait until all jobs in this placement are no longer in
+        progress.  In progress means 'idle', 'running', 'transferring input',
+        or 'transferring output', but not 'held', 'completed', 'removed', or
+        'suspended'.
+
+        Exit early if we haven't gotten a status update
+        in MAX_STATUS_WAIT.
+        """
+        print("Waiting for completion of jobs")
+        while True:
+            self._update_status()
+            now = time.time()
+            time_since_last_update = self.status_last_update - now
+            if time_since_last_update > self.MAX_STATUS_WAIT:
+                print(f"No update received in {int(time_since_last_update)} seconds.")
+                print(f"Aborting wait; please investigate.")
+            jobs_in_progress = (
+                self.status["idle"]
+                + self.status["running"]
+                + self.status["transferring_input"]
+                + self.status["transferring_output"]
+            )
+            if jobs_in_progress == 0:
+                self.print_status()
+                print("Done waiting.")
+            time.sleep(MIN_DELAY_BETWEEN_UPDATES)
 
     def retrieve_results(self):
         return self.ap.schedd.retrieve(job_spec=self.constraint)
@@ -457,6 +536,7 @@ class AP:
     """
     AP is a class for interacting with a remote Access Point, specifically its SchedD.
     """
+
     def __init__(self, collector_host=None, schedd_host=None):
         if collector_host:
             self.collector = htcondor2.Collector(collector_host)
