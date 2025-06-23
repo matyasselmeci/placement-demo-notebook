@@ -428,7 +428,7 @@ def setup():
 class Placement:
     _log = _log.getChild("Placement")
 
-    MIN_DELAY_BETWEEN_UPDATES = 5.0  # seconds
+    MIN_DELAY_BETWEEN_UPDATES = 10.0  # seconds
     # ^^ maybe I should base this on DCDC?
     MAX_STATUS_WAIT = 60.0  # seconds
     HOLD_REASON_CODE_SPOOLING_INPUT = 16
@@ -464,7 +464,7 @@ class Placement:
         """
         now = time.time()
         if now - self.status_last_update < self.MIN_DELAY_BETWEEN_UPDATES:
-            self._log.warning("Not updating status yet -- too soon")
+            self._log.debug("Not updating status yet -- too soon")
             return False
         try:
             query = self.ap.query(self.constraint, ["JobStatus", "HoldReasonCode"])
@@ -482,7 +482,7 @@ class Placement:
                         == self.HOLD_REASON_CODE_SPOOLING_INPUT
                     ):
                         self.status[name] += 1
-                else:
+                elif job["JobStatus"] == code:
                     self.status[name] += 1
         self.status_last_update = time.time()
         return True
@@ -492,7 +492,7 @@ class Placement:
         Print the status of jobs in the cluster from this placement.
         """
         self._update_status()
-        for name, num_in_status in self.status:
+        for name, num_in_status in self.status.items():
             space_name = name.replace("_", " ")
             if num_in_status > 1:
                 print(f"{num_in_status} jobs are currently {space_name}.")
