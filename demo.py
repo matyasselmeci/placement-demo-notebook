@@ -475,15 +475,19 @@ class Placement:
         for code, name in enumerate(self.status.keys(), start=1):
             self.status[name] = 0
             for job in query:
+                hold_reason_code = job.get("HoldReasonCode")
                 if name == "transferring_input":
                     if (
                         job["JobStatus"] == 5
-                        and job.get("HoldReasonCode")
-                        == self.HOLD_REASON_CODE_SPOOLING_INPUT
+                        and hold_reason_code == self.HOLD_REASON_CODE_SPOOLING_INPUT
                     ):
                         self.status[name] += 1
                 elif job["JobStatus"] == code:
-                    self.status[name] += 1
+                    if not (
+                        name == "held"
+                        and hold_reason_code == self.HOLD_REASON_CODE_SPOOLING_INPUT
+                    ):
+                        self.status[name] += 1
         self.status_last_update = time.time()
         return True
 
