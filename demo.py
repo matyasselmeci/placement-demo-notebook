@@ -161,7 +161,7 @@ class DeviceClient:
             if error == "authorization_pending":
                 return None
             if error == "slow_down":
-                self.interval += 1
+                self.interval += 5
                 self._log.debug("Received slow_down; interval set to %d", self.interval)
                 return None
             if error == "access_denied":
