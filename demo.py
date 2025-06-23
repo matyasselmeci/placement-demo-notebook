@@ -339,11 +339,7 @@ class DeviceWidgets:
 
 class TokenFileUploadWidgets:
     def __init__(self):
-        maybe_tz = os.environ.get("TIMEZONE")
-        if maybe_tz:
-            self.tz = dateutil.tz.gettz(maybe_tz)  # type: ignore
-        else:
-            self.tz = dateutil.tz.gettz()  # type: ignore
+        self.tz = get_timezone()
 
         # The description on the FileUpload widget doesn't fit the default
         # layout so set up one of our own.  See
@@ -412,9 +408,17 @@ class TokenFileUploadWidgets:
 
 #
 #
-# Functions and classes for interactive use
+# Other functions and classes, mostly for interactive use
 #
 #
+
+
+def get_timezone():
+    maybe_tz = os.environ.get("TIMEZONE")
+    if maybe_tz:
+        return dateutil.tz.gettz(maybe_tz)  # type: ignore
+    else:
+        return dateutil.tz.gettz()  # type: ignore
 
 
 def setup():
@@ -456,6 +460,7 @@ class Placement:
             suspended=None,
             transferring_input=None,  # this one is not a real code
         )
+        self.tz = get_timezone()
         self._update_status()
 
     def _update_status(self) -> bool:
@@ -505,7 +510,8 @@ class Placement:
         if self.status_last_update < 0.1:  # it's a float; don't try equality
             print("Status unknown")
             return
-        update_time_str = time.strftime("%T", time.localtime(self.status_last_update))
+        update_datetime = datetime.fromtimestamp(self.status_last_update, tz=self.tz)
+        update_time_str = update_datetime.strftime("%T")
         print(f"As of {update_time_str}:")
         for status_name, num_in_status in self.status.items():
             space_name = status_name.replace("_", " ")
