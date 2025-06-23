@@ -14,6 +14,7 @@ then
         cd placement_demo &&
         cp \
             demo.py \
+            test_job.submit \
             ..
     )
     export PLACEMENT_WEBAPP_LINK

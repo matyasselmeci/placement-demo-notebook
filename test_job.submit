@@ -1,0 +1,8 @@
+Output = test_job_result.txt
+Log = test_job.$(Cluster).log
+
+Executable = /bin/bash
+Arguments = "-c 'sleep 30; echo Job succeeded at `date`' 2>&1"
+Transfer_Executable = false
+
+Queue
