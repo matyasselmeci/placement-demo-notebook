@@ -1,6 +1,7 @@
 import datetime
 import html
 import logging
+import math
 import os
 import pathlib
 import sys
@@ -21,6 +22,10 @@ TOKEN_FILENAME = "Placement.token"
 
 _log = logging.getLogger(__name__)
 
+
+MaybeError = t.Union[None, Exception]
+
+
 #
 #
 # Utils for installing the token once obtained
@@ -39,6 +44,7 @@ def write_token(token_filename: str, token_contents: bytes):
     """
     condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
     condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    condor_tokens_dir.chmod(0o700)  # mkdir doesn't set the mode if it already exists
     token_dest = condor_tokens_dir / token_filename
     with open(token_dest, mode="wb") as fh:
         token_dest.chmod(0o600)
@@ -51,7 +57,6 @@ def token_stat(token_filename: str):
     an error (e.g., the file does not exist), returns None.
     """
     condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
-    condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     token_dest = condor_tokens_dir / token_filename
     try:
         return token_dest.stat()
@@ -159,10 +164,10 @@ class DeviceClient:
                 },
             )
             response_json = response.json()
-        except (OSError, urllib3.exceptions.HTTPError) as err:
-            raise DeviceClientError("Lost connection to server: %s" % err) from err
         except requests.exceptions.JSONDecodeError as err:
             raise DeviceClientUnexpectedOutput("Invalid JSON: %s" % err)
+        except (OSError, urllib3.exceptions.HTTPError) as err:
+            raise DeviceClientError("Lost connection to server: %s" % err) from err
 
         if response.status_code == 400:
             try:
@@ -273,7 +278,9 @@ class DeviceWidgets:
                 "The token request failed; please try again."
             )
             return
-        button.description = "Token request in progress, please wait"
+        button.description = (
+            "Token requested; please follow the link to complete the procedure."
+        )
         button.disabled = True
         try:
             link = html.escape(self.client.verification_uri)
@@ -450,31 +457,32 @@ class Placement:
         self.constraint = f"ClusterId == {self.cluster}"
         self.ap = ap
         self.status_last_update = 0.0
+        self.status_next_update = 0.0
         self.status = dict(
-            idle=None,
-            running=None,
-            removed=None,
-            completed=None,
-            held=None,
-            transferring_output=None,
-            suspended=None,
-            transferring_input=None,  # this one is not a real code
+            idle=0,
+            running=0,
+            removed=0,
+            completed=0,
+            held=0,
+            transferring_output=0,
+            suspended=0,
+            transferring_input=0,  # this one is not a real code
         )
         self.tz = get_timezone()
         self._update_status()
 
-    def _update_status(self) -> bool:
+    def _update_status(self, force=False) -> bool:
         """
         Update self.status() with the latest status of the jobs in this
         placement.  Since it's a remote placement, we query the schedd instead
         of using the JobEventLog.  Keep track of the last update time in
         self.status_last_update; don't update more frequently than
-        MIN_DELAY_BETWEEN_UPDATES.
+        MIN_DELAY_BETWEEN_UPDATES, unless `force` is true.
 
         Return True if we were able to update, False otherwise.
         """
         now = time.time()
-        if now - self.status_last_update < self.MIN_DELAY_BETWEEN_UPDATES:
+        if not force and now < self.status_next_update:
             self._log.debug("Not updating status yet -- too soon")
             return False
         try:
@@ -500,17 +508,20 @@ class Placement:
                     ):
                         self.status[name] += 1
         self.status_last_update = time.time()
+        self.status_next_update = time.time() + self.MIN_DELAY_BETWEEN_UPDATES
         return True
 
-    def print_status(self):
+    def show_status(self):
         """
         Print the status of jobs in the cluster from this placement.
         """
         self._update_status()
-        if self.status_last_update < 0.1:  # it's a float; don't try equality
+        if not self.status_last_update:
             print("Status unknown")
             return
-        update_datetime = datetime.datetime.fromtimestamp(self.status_last_update, tz=self.tz)
+        update_datetime = datetime.datetime.fromtimestamp(
+            self.status_last_update, tz=self.tz
+        )
         update_time_str = update_datetime.strftime("%T")
         print(f"As of {update_time_str}:")
         for status_name, num_in_status in self.status.items():
@@ -520,7 +531,20 @@ class Placement:
             elif num_in_status == 1:
                 print(f"1 job is {space_name}.")
 
-    def wait_for_completion(self):
+    def show_job_ids(self):
+        """
+        Print the range of job IDs in this cluster.
+        """
+        if self.num_procs == 1:
+            print("Placement has job ID {0}".format(self.cluster))
+        else:
+            print(
+                "Placement has job IDs {0}.0 - {0}.{1}".format(
+                    self.cluster, self.num_procs - 1
+                )
+            )
+
+    def monitor_jobs(self, minutes: t.Union[int, float] = math.inf):
         """
         Loop and wait until all jobs in this placement are no longer in
         progress.  In progress means 'idle', 'running', 'transferring input',
@@ -530,27 +554,70 @@ class Placement:
         Exit early if we haven't gotten a status update
         in MAX_STATUS_WAIT.
         """
-        print("Waiting for completion of jobs")
+        minutes = float(minutes)
+        if minutes < 0.0:
+            raise ValueError(f"'minutes' cannot be negative: {minutes}")
+        if math.isinf(minutes):
+            print("Monitoring jobs")
+        elif minutes == 0.0:
+            print(f"Checking job status")
+            self._update_status(force=True)
+            return self.show_status()
+        else:
+            print(f"Monitoring jobs for up to {minutes:.2g} minutes")
+        end_time = time.time() + minutes * 60.0
+
+        # Monitor jobs until the following:
+        #   - no update has been received in MAX_STATUS_WAIT seconds
+        #   - no jobs in progress (IN_PROGRESS_STATUS)
+        #   - the next update would be after end_time
         while True:
             update_success = self._update_status()
             now = time.time()
             time_since_last_update = self.status_last_update - now
             if time_since_last_update > self.MAX_STATUS_WAIT:
                 print(f"No update received in {int(time_since_last_update)} seconds.")
-                print(f"Aborting wait; please investigate.")
+                print(f"Stopped monitoring early; please investigate.")
+                return
             if update_success:
-                jobs_in_progress = 0
-                for status_name in self.IN_PROGRESS_STATUSES:
-                    jobs_in_progress += self.status[status_name]
                 print("---------")
-                self.print_status()
-                if jobs_in_progress == 0:
-                    print("Done waiting.")
+                self.show_status()
+                if not self.jobs_in_progress:
+                    print("No jobs in progress; done monitoring.")
                     return
+            if self.status_next_update > end_time:
+                print("End time reached; stopped monitoring.")
+                return
             time.sleep(self.MIN_DELAY_BETWEEN_UPDATES)
 
-    def retrieve_results(self):
-        return self.ap.schedd.retrieve(job_spec=self.constraint)
+    @property
+    def jobs_in_progress(self) -> int:
+        """
+        The number of jobs still 'in progress'.
+        Does _not_ pull the new status from the schedd.
+        """
+        return sum(
+            self.status[status_name] for status_name in self.IN_PROGRESS_STATUSES
+        )
+
+    def retrieve_results(self) -> bool:
+        """
+        Retrieve results for completed jobs.
+        Return True if we didn't get any exceptions from HTCondor.
+
+        Hard to get other information (like how many jobs' results were retrieved)
+        because HTCondor does not give us that.  We could try to figure that out
+        by querying the schedd, getting the list of expected files, and checking them
+        out ourselves but that would be inaccurate since the status of the queue
+        would be different between retrieval and query...
+        """
+        try:
+            self.ap.schedd.retrieve(job_spec=self.constraint)
+        except htcondor2.HTCondorException as err:
+            print(f"Retreiving results failed with error {err}", file=sys.stderr)
+            return False
+        print("Retrieving results successful")
+        return True
 
 
 class AP:
@@ -580,10 +647,22 @@ class AP:
     ):
         return self.schedd.query(constraint=constraint, projection=attributes or [])
 
-    def get_job_count(self, constraint: t.Union[str, classad2.ExprTree] = "True"):
+    def get_job_count(
+        self, constraint: t.Union[str, classad2.ExprTree] = "True"
+    ) -> int:
         return len(
             self.query(constraint=constraint, attributes=["ClusterId", "ProcId"])
         )
+
+    def show_job_count(self, constraint: t.Union[str, classad2.ExprTree] = "True"):
+        count = self.get_job_count(constraint)
+        if constraint == "True":
+            print("There are %d jobs currently placed at the AP." % count)
+        else:
+            print(
+                "There are %d jobs matching the constraint %s currently placed at the AP"
+                % (count, constraint)
+            )
 
 
 def load_job_description(submit_file: t.Union[str, os.PathLike]):

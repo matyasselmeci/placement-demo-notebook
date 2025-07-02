@@ -1,4 +1,4 @@
-# TODO This script should be part of the Kubernetes application, not here.
+# Changes to this script should be copied to the Kubernetes application
 #
 # This script is meant to be mounted into /image-init.d, to be sourced
 # at container startup.

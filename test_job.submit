@@ -1,5 +1,5 @@
-Output = test_job_result.txt
-Log = test_job.$(Cluster).log
+Output = work/test_job_result.txt
+Log = work/test_job.$(Cluster).log
 
 Executable = /bin/bash
 Arguments = "-c 'sleep 30; echo Job succeeded at `date`' 2>&1"

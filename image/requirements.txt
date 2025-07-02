@@ -1,4 +1,6 @@
 ipywidgets
 jupyter_app_launcher
+jupyterlab_scenes
 python-dateutil
 requests
+htcondor
