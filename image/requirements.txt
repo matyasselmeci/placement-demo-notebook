@@ -4,3 +4,5 @@ jupyterlab_scenes
 python-dateutil
 requests
 htcondor
+cloudpickle
+dill
