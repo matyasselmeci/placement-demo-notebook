@@ -451,7 +451,6 @@ class Placement:
     ]
 
     def __init__(self, submit_result: htcondor2.SubmitResult, ap: "AP"):
-        self.submit_result = submit_result
         self.cluster = submit_result.cluster()
         self.num_procs = submit_result.num_procs()
         self.constraint = f"ClusterId == {self.cluster}"
@@ -614,7 +613,9 @@ class Placement:
         try:
             self.ap.schedd.retrieve(job_spec=self.constraint)
         except htcondor2.HTCondorException as err:
-            print(f"Retreiving results failed with error message {err}", file=sys.stderr)
+            print(
+                f"Retreiving results failed with error message {err}", file=sys.stderr
+            )
             return False
         print("Retrieving results successful")
         return True
@@ -626,13 +627,36 @@ class AP:
     """
 
     def __init__(self, collector_host=None, schedd_host=None):
+        self.collector_host = collector_host
         if collector_host:
-            self.collector = htcondor2.Collector(collector_host)
+            collector = htcondor2.Collector(collector_host)
         else:
-            self.collector = htcondor2.Collector()
-        schedd_host = schedd_host or htcondor2.param["SCHEDD_HOST"]
-        schedd_ad = self.collector.locate(htcondor2.DaemonType.Schedd, schedd_host)
-        self.schedd = htcondor2.Schedd(schedd_ad)
+            collector = htcondor2.Collector()
+        self.schedd_host = schedd_host or htcondor2.param["SCHEDD_HOST"]
+        self.schedd_ad = collector.locate(htcondor2.DaemonType.Schedd, self.schedd_host)
+        self.schedd = htcondor2.Schedd(self.schedd_ad)
+
+    def __getstate__(self):
+        """
+        Return the object's state, removing unpicklable entries -- in this case,
+        the handle to the schedd.  We save the schedd ad instead.
+        """
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+        # Remove the unpicklable entries.
+        del state["schedd"]
+        return state
+
+    def __setstate__(self, state):
+        """
+        Restore the object's state from a pickle; recreate the handle to the
+        schedd using the schedd ad we saved.
+        """
+        # Restore instance attributes
+        self.__dict__.update(state)
+        self.schedd = htcondor2.Schedd(self.schedd_ad)
 
     def place(self, submit_object: htcondor2.Submit) -> Placement:
         submit_result = self.schedd.submit(submit_object, spool=True)
@@ -665,9 +689,23 @@ class AP:
             )
 
 
+class PickleableSubmit(htcondor2.Submit):
+    # A pickleable htcondor2.Submit
+    def __getstate__(self):
+        state = dict(
+            input=str(self),
+            submitMethod=self.getSubmitMethod(),
+        )
+        return state
+
+    def __setstate__(self, state):
+        super().__init__(state["input"])
+        self.setSubmitMethod(state["submitMethod"])
+
+
 def load_job_description(submit_file: t.Union[str, os.PathLike]):
     """
     Reads the job description from the given submit file path.
     """
     file_path = pathlib.Path(submit_file)
-    return htcondor2.Submit(file_path.read_text())
+    return PickleableSubmit(file_path.read_text())
