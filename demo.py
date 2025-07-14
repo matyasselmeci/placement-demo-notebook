@@ -173,7 +173,7 @@ class DeviceClient:
             try:
                 error: str = response_json["error"]
             except KeyError:
-                raise DeviceClientUnexpectedOutput("Unknown error from server")
+                raise DeviceClientUnexpectedOutput("Unknown failure from server")
             if error == "authorization_pending":
                 return None
             if error == "slow_down":
@@ -186,7 +186,7 @@ class DeviceClient:
                 raise DeviceClientTimedOut("Server responds device code expired")
 
             raise DeviceClientUnexpectedOutput(
-                "Server responds with unexpected error %s" % error
+                "Server responds with unexpected failure %s" % error
             )
 
         elif response.status_code == 200:
@@ -204,7 +204,7 @@ class DeviceClient:
                 access_token_b = access_token.encode()
             except (TypeError, AttributeError, UnicodeEncodeError) as err:
                 raise DeviceClientUnexpectedOutput(
-                    "Error encoding access token: %r" % err
+                    "Failed to encode access token: %r" % err
                 )
             return access_token_b
 
@@ -614,7 +614,7 @@ class Placement:
         try:
             self.ap.schedd.retrieve(job_spec=self.constraint)
         except htcondor2.HTCondorException as err:
-            print(f"Retreiving results failed with error {err}", file=sys.stderr)
+            print(f"Retreiving results failed with error message {err}", file=sys.stderr)
             return False
         print("Retrieving results successful")
         return True
