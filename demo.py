@@ -700,7 +700,7 @@ class PickleableSubmit(htcondor2.Submit):
 
     def __setstate__(self, state):
         super().__init__(state["input"])
-        self.setSubmitMethod(state["submitMethod"])
+        self.setSubmitMethod(state["submitMethod"], allow_reserved_values=True)
 
 
 def load_job_description(submit_file: t.Union[str, os.PathLike]):
