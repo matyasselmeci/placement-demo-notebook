@@ -457,7 +457,7 @@ class Placement:
         self.ap = ap
         self.status_last_update = 0.0
         self.status_next_update = 0.0
-        self.status = dict(
+        self._status = dict(
             idle=0,
             running=0,
             removed=0,
@@ -469,6 +469,11 @@ class Placement:
         )
         self.tz = get_timezone()
         self._update_status()
+
+    @property
+    def status(self) -> dict:
+        self._update_status()
+        return self._status.copy()
 
     def _update_status(self, force=False) -> bool:
         """
@@ -490,8 +495,8 @@ class Placement:
             self._log.warning("Unable to update status", exc_info=True)
             return False
 
-        for code, name in enumerate(self.status.keys(), start=1):
-            self.status[name] = 0
+        for code, name in enumerate(self._status.keys(), start=1):
+            self._status[name] = 0
             for job in query:
                 hold_reason_code = job.get("HoldReasonCode")
                 if name == "transferring_input":
@@ -499,13 +504,13 @@ class Placement:
                         job["JobStatus"] == 5
                         and hold_reason_code == self.HOLD_REASON_CODE_SPOOLING_INPUT
                     ):
-                        self.status[name] += 1
+                        self._status[name] += 1
                 elif job["JobStatus"] == code:
                     if not (
                         name == "held"
                         and hold_reason_code == self.HOLD_REASON_CODE_SPOOLING_INPUT
                     ):
-                        self.status[name] += 1
+                        self._status[name] += 1
         self.status_last_update = time.time()
         self.status_next_update = time.time() + self.MIN_DELAY_BETWEEN_UPDATES
         return True
@@ -523,7 +528,7 @@ class Placement:
         )
         update_time_str = update_datetime.strftime("%T")
         print(f"As of {update_time_str}:")
-        for status_name, num_in_status in self.status.items():
+        for status_name, num_in_status in self._status.items():
             space_name = status_name.replace("_", " ")
             if num_in_status > 1:
                 print(f"{num_in_status} jobs are {space_name}.")
@@ -596,7 +601,7 @@ class Placement:
         Does _not_ pull the new status from the schedd.
         """
         return sum(
-            self.status[status_name] for status_name in self.IN_PROGRESS_STATUSES
+            self._status[status_name] for status_name in self.IN_PROGRESS_STATUSES
         )
 
     def retrieve_results(self) -> bool:
