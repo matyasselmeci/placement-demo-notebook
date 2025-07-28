@@ -10,6 +10,9 @@ USER root
 
 RUN true \
     && dpkg -i /condor-debs/*.deb \
+    && apt-get update \
+    && apt-get install -y sqlite3 \
+    && apt-get clean \
     && install -o jovyan -m 0700 -d /home/jovyan/.condor/tokens.d \
     && chown -R jovyan /home/jovyan/.condor \
     && true
