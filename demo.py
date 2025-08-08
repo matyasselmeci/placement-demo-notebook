@@ -664,7 +664,14 @@ class AP:
         self.schedd = htcondor2.Schedd(self.schedd_ad)
 
     def place(self, submit_object: htcondor2.Submit) -> Placement:
-        submit_result = self.schedd.submit(submit_object, spool=True)
+        try:
+            submit_result = self.schedd.submit(submit_object, spool=True)
+        except htcondor2.HTCondorException as err:
+            if "errmsg=AUTHENTICATE" in str(err):
+                raise RuntimeError(
+                    "Authentication to the AP failed. You might need to get another token.")
+            else:
+                raise
         self.schedd.spool(submit_result)
         placement = Placement(submit_result, ap=self)
         return placement
