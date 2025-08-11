@@ -31,6 +31,8 @@ ADD --chmod=0644 --chown=$NB_UID:$NB_GID \
     jp_app_launcher_pddemo.yml \
     /home/jovyan/.local/share/jupyter/jupyter_app_launcher/jp_app_launcher_pddemo.yml
 
+CMD ["start-notebook.py"]
+
 ENV _condor_SEC_CLIENT_AUTHENTICATION_METHODS=FS,IDTOKENS
 
 #
