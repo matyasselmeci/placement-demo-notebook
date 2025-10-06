@@ -81,10 +81,11 @@ def have_valid_token(
     Return whether the token is expired, missing, unreadable, or OK
     """
     token_path = pathlib.Path(token_filename)
-    if not token_path.exists():
-        return TokenState.MISSING
     try:
         contents = token_path.read_bytes()
+    except FileNotFoundError as err:
+        _log.debug("%s not found", token_path)
+        return TokenState.MISSING
     except OSError as err:
         _log.debug("OSError(%s) reading token %s", err, token_path)
         return TokenState.UNREADABLE
