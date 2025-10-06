@@ -12,8 +12,8 @@ then
         cd "$HOME"
         git clone -b "${NOTEBOOK_BRANCH:-main}" https://github.com/matyasselmeci/placement-demo-notebook placement_demo
         cd placement_demo &&
-        cp \
-            demo.py \
+        cp -r \
+            demo/ \
             test_job.submit \
             ..
     )
