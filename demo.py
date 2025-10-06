@@ -1,5 +1,8 @@
+import base64
 import datetime
+import enum
 import html
+import json
 import logging
 import math
 import os
@@ -24,6 +27,13 @@ _log = logging.getLogger(__name__)
 
 
 MaybeError = t.Union[None, Exception]
+
+
+class TokenState(enum.Enum):
+    MISSING = "MISSING"
+    UNREADABLE = "UNREADABLE"
+    EXPIRED = "EXPIRED"
+    OK = "OK"
 
 
 #
@@ -62,6 +72,32 @@ def token_stat(token_filename: str):
         return token_dest.stat()
     except OSError:
         return None
+
+
+def have_valid_token(
+    token_filename: t.Union[str, os.PathLike] = TOKEN_FILENAME,
+) -> TokenState:
+    """
+    Return whether the token is expired, missing, unreadable, or OK
+    """
+    token_path = pathlib.Path(token_filename)
+    if not token_path.exists():
+        return TokenState.MISSING
+    try:
+        contents = token_path.read_bytes()
+    except OSError as err:
+        _log.debug("OSError(%s) reading token %s", err, token_path)
+        return TokenState.UNREADABLE
+    try:
+        body = contents.split(b'.')[1]
+        body_json = json.loads(base64.urlsafe_b64decode(body + b'=='))
+        expiration = float(body_json["exp"])
+    except (IndexError, ValueError) as err:
+        _log.debug("Error %s decoding token %s", err, token_path, exc_info=True)
+        return TokenState.UNREADABLE
+    if expiration < time.time():
+        return TokenState.EXPIRED
+    return TokenState.OK
 
 
 #
@@ -669,7 +705,8 @@ class AP:
         except htcondor2.HTCondorException as err:
             if "errmsg=AUTHENTICATE" in str(err):
                 raise RuntimeError(
-                    "Authentication to the AP failed. You might need to get another token.")
+                    "Authentication to the AP failed. You might need to get another token."
+                )
             else:
                 raise
         self.schedd.spool(submit_result)
@@ -699,6 +736,84 @@ class AP:
                 "There are %d jobs matching the constraint %s currently placed at the AP"
                 % (count, constraint)
             )
+
+    def describe_token(self):
+        project = None
+        user = None
+        have_read = False
+        have_write = False
+        ad = {}
+        text = []
+
+        state = have_valid_token()
+
+        match state:
+            case TokenState.MISSING:
+                print("The token file is missing")
+                return False, False, None
+            case TokenState.UNREADABLE:
+                print("The token file cannot be read or is not a recognizable token")
+                return False, False, None
+            case TokenState.EXPIRED:
+                print("The token is expired.")
+                return False, False, None
+            case TokenState.OK:
+                pass
+
+        try:
+            ad = htcondor2.ping(self.schedd_ad, "READ")
+            have_read = True
+            # ^^ maybe also check ad['AuthorizationSucceeded'] ?
+            text.append(
+                "You can list jobs and view the details of jobs with your current token."
+            )
+        except htcondor2.HTCondorException as err:
+            if "Failed to start command" in str(err):
+                have_read = False
+                text.append(
+                    "You CANNOT list jobs or view the details of jobs with your current token."
+                )
+            else:
+                raise
+        try:
+            ad = htcondor2.ping(self.schedd_ad, "WRITE")
+            have_write = True
+            # ^^ maybe also check ad['AuthorizationSucceeded'] ?
+            user_ad = (self.schedd.queryUserAds(constraint=f'User=="{user}"') or [{}])[0]  # fmt: skip
+            # ^^ TODO We can't do this query if we don't have READ.
+            if user_ad.get("Enabled", True):
+                text.append(
+                    "You can place, remove, edit, hold, release, and otherwise manipulate jobs with your current token."
+                )
+            else:
+                text.append(
+                    "You can remove, edit, hold, release, and otherwise manipulate existing jobs with your current token."
+                )
+                text.append(
+                    "However, you CANNOT place new jobs, and your existing jobs will not start."
+                )
+        except htcondor2.HTCondorException as err:
+            if "Failed to start command" in str(err):
+                have_read = False
+                text.append(
+                    "You CANNOT place, remove, edit, hold, release, or otherwise manipulate jobs with your current token."
+                )
+            else:
+                raise
+        project = ad.get("AuthTokenProject")
+        user = ad.get("MyRemoteUserName")
+        if user:
+            text.append(f"Your AP User ID is '{user}'.")
+        else:
+            text.append(
+                "ERROR: Your AP User ID is unknown."
+            )  # XXX how can this happen?
+        if project:
+            text.append(f"Your currently selected project is '{project}'.")
+        else:
+            text.append("WARNING: Your currently selected project is unknown.")
+
+        print("\n".join(text))
 
 
 class PickleableSubmit(htcondor2.Submit):
