@@ -4,13 +4,16 @@ ADD --chmod=0644 condor/condor_*.deb \
                  condor/htcondor_*.deb \
                  condor/minicondor_*.deb \
                  condor/minihtcondor_*.deb \
+                 condor/pelican*.deb \
                  /condor-debs
 
 USER root
 
 RUN true \
-    && dpkg -i /condor-debs/*.deb \
+    && apt-get remove -y minihtcondor condor-upgrade-checks \
     && apt-get update \
+    && apt-get install -y jq \
+    && dpkg -i /condor-debs/*.deb \
     && apt-get install -y sqlite3 \
     && apt-get clean \
     && install -o jovyan -m 0700 -d /home/jovyan/.condor/tokens.d \
