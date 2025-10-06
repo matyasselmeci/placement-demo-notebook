@@ -74,13 +74,13 @@ def token_stat(token_filename: str):
         return None
 
 
-def have_valid_token(
-    token_filename: t.Union[str, os.PathLike] = TOKEN_FILENAME,
+def get_token_state(
+    token_filename: str = TOKEN_FILENAME,
 ) -> TokenState:
     """
     Return whether the token is expired, missing, unreadable, or OK
     """
-    token_path = pathlib.Path(token_filename)
+    token_path = pathlib.Path.home() / ".condor/tokens.d" / token_filename
     try:
         contents = token_path.read_bytes()
     except FileNotFoundError as err:
@@ -738,7 +738,7 @@ class AP:
                 % (count, constraint)
             )
 
-    def describe_token(self):
+    def describe_token(self, token_filename: str = TOKEN_FILENAME):
         project = None
         user = None
         have_read = False
@@ -746,18 +746,18 @@ class AP:
         ad = {}
         text = []
 
-        state = have_valid_token()
+        state = get_token_state(token_filename)
 
         match state:
             case TokenState.MISSING:
                 print("The token file is missing")
-                return False, False, None
+                return
             case TokenState.UNREADABLE:
                 print("The token file cannot be read or is not a recognizable token")
-                return False, False, None
+                return
             case TokenState.EXPIRED:
                 print("The token is expired.")
-                return False, False, None
+                return
             case TokenState.OK:
                 pass
 
