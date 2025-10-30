@@ -55,4 +55,4 @@ ENV _condor_SEC_CLIENT_AUTHENTICATION_METHODS=FS,IDTOKENS
 ENV NOTEBOOK_BRANCH=main
 ENV DEVICE_CLIENT_ID=placement_demo_notebook
 ENV PLACEMENT_WEBAPP_LINK=https://demo-ap.chtc.wisc.edu
-ENV TIMEZONE=America/Chicago
+ENV TZ=America/Chicago
