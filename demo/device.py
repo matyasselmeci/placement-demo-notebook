@@ -4,6 +4,7 @@ Code for obtaining a token via OAuth2 Device Flow
 
 import logging
 import time
+import typing as t
 
 import requests
 import urllib3
@@ -89,7 +90,7 @@ class DeviceClient:
         self.request_in_progress = True
         return self
 
-    def poll_for_token(self) -> bytes | None:
+    def poll_for_token(self) -> t.Optional[bytes]:
         if not self.request_in_progress:
             raise DeviceClientRequestNotInProgress()
         try:

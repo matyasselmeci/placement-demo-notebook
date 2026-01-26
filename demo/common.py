@@ -5,7 +5,9 @@ import logging
 import os
 import pathlib
 import time
+import typing as t
 
+import classad2
 import dateutil
 
 _log = logging.getLogger(__name__)
@@ -16,6 +18,10 @@ class TokenState(enum.Enum):
     UNREADABLE = "UNREADABLE"
     EXPIRED = "EXPIRED"
     OK = "OK"
+
+
+T_Constraint = t.Union["classad2.ExprTree", str]
+T_PathOrStr = t.Union[os.PathLike, str]
 
 
 #

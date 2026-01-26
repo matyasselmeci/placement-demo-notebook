@@ -5,11 +5,19 @@ import os
 import pathlib
 import sys
 import time
+import typing as t
 
 import classad2
 import htcondor2
 
-from demo.common import TOKEN_FILENAME, TokenState, get_timezone, get_token_state
+from demo.common import (
+    TOKEN_FILENAME,
+    T_Constraint,
+    T_PathOrStr,
+    TokenState,
+    get_timezone,
+    get_token_state,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -67,17 +75,17 @@ class AP:
 
     def query(
         self,
-        constraint: classad2.ExprTree | str = "True",
-        attributes: list[str] | None = None,
+        constraint: T_Constraint = "True",
+        attributes: t.Optional[list[str]] = None,
     ) -> list[classad2.ClassAd]:
         return self.schedd.query(constraint=constraint, projection=attributes or [])
 
-    def get_job_count(self, constraint: classad2.ExprTree | str = "True") -> int:
+    def get_job_count(self, constraint: T_Constraint = "True") -> int:
         return len(
             self.query(constraint=constraint, attributes=["ClusterId", "ProcId"])
         )
 
-    def show_job_count(self, constraint: classad2.ExprTree | str = "True"):
+    def show_job_count(self, constraint: T_Constraint = "True"):
         count = self.get_job_count(constraint)
         if constraint == "True":
             print("There are %d jobs currently placed at the AP." % count)
@@ -180,7 +188,7 @@ class PickleableSubmit(htcondor2.Submit):
         self.setSubmitMethod(state["submitMethod"], allow_reserved_values=True)
 
 
-def load_job_description(submit_file: str | os.PathLike):
+def load_job_description(submit_file: T_PathOrStr):
     """
     Reads the job description from the given submit file path.
     """
@@ -300,7 +308,7 @@ class Placement:
                 )
             )
 
-    def monitor_jobs(self, minutes: int | float = math.inf):
+    def monitor_jobs(self, minutes: t.Union[int, float] = math.inf):
         """
         Loop and wait until all jobs in this placement are no longer in
         progress.  In progress means 'idle', 'running', 'transferring input',
