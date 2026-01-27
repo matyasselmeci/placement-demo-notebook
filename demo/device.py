@@ -1,5 +1,21 @@
 """
-Code for obtaining a token via OAuth2 Device Flow
+device.py
+-----------
+
+This module provides the DeviceClient class for handling OAuth2 Device Flow authentication.
+It allows a client to obtain an access token by guiding the user through the device authorization process.
+
+Features:
+- Initiates device authorization requests
+- Polls for token completion
+- Handles device code expiration, polling intervals, and error conditions
+
+Usage:
+    client = DeviceClient(webapp_server, client_id)
+    client.make_request()
+    # Display client.user_code and client.verification_uri to the user
+    token = client.poll_for_token_loop()
+    # Use the token as needed
 """
 
 import logging
@@ -14,6 +30,10 @@ _log = logging.getLogger(__name__)
 
 class DeviceClientError(Exception):
     """Errors while trying to the device flow."""
+
+
+class DeviceClientInitialRequestError(DeviceClientError):
+    """Some failure to make the initial request to the remote server."""
 
 
 class DeviceClientUnexpectedOutput(DeviceClientError):
@@ -33,6 +53,15 @@ class DeviceClientAccessDenied(DeviceClientError):
 
 
 class DeviceClient:
+    """
+    Client for obtaining tokens via OAuth2 Device Flow.
+
+    This class handles the device flow authorization process, including:
+    - Making the initial device authorization request
+    - Polling for token completion
+    - Managing device code expiration and polling intervals
+    """
+
     GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
     REQUEST_ENDPOINT = "/auth/device_authorization"
 
@@ -48,13 +77,26 @@ class DeviceClient:
         self.request_in_progress = False
 
     def make_request(self) -> "DeviceClient":
+        """
+        Starts the session for the device flow by making the initial request
+        to the webapp server for the token.
+
+        Returns self for convenience.
+
+        Raises:
+            DeviceClientInitialRequestError:
+                If we couldn't connect to the server or got an immediate
+                error response.
+            DeviceClientUnexpectedOutput:
+                If the message from the server is malformed somehow.
+        """
         try:
             response = requests.post(
                 url=self.request_url,
                 data={"client_id": self.client_id},
             )
         except (OSError, urllib3.exceptions.HTTPError) as err:
-            raise DeviceClientError(
+            raise DeviceClientInitialRequestError(
                 "Initial request failed to connect to server: %s" % err
             ) from err
         try:
@@ -91,6 +133,20 @@ class DeviceClient:
         return self
 
     def poll_for_token(self) -> t.Optional[bytes]:
+        """
+        Poll the server performing the device flow for the placement token.
+
+        Returns:
+            The placement token encoded as bytes if successful, None if
+            authorization is still pending.
+
+        Raises:
+            DeviceClientRequestNotInProgress: If no device flow session is in progress.
+            DeviceClientUnexpectedOutput: If the server response is invalid or unexpected.
+            DeviceClientAccessDenied: If the user denied the token request.
+            DeviceClientTimedOut: If the device code has expired.
+            DeviceClientError: If connection to server is lost.
+        """
         if not self.request_in_progress:
             raise DeviceClientRequestNotInProgress()
         try:
