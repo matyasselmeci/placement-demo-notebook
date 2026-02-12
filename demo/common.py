@@ -40,6 +40,8 @@ def write_token(token_filename: str, token_contents: bytes):
 
     token_contents: The bytes to write into the token file.
     """
+    if "/" in token_filename or "\\" in token_filename or ":" in token_filename:
+        raise ValueError(f"token_filename cannot have a directory: {token_filename}")
     condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
     condor_tokens_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     condor_tokens_dir.chmod(0o700)  # mkdir doesn't set the mode if it already exists
@@ -54,6 +56,8 @@ def token_stat(token_filename: str):
     Calls stat() on the token file and returns the results.  If there is
     an error (e.g., the file does not exist), returns None.
     """
+    if "/" in token_filename or "\\" in token_filename or ":" in token_filename:
+        raise ValueError(f"token_filename cannot have a directory: {token_filename}")
     condor_tokens_dir = pathlib.Path.home() / ".condor/tokens.d"
     token_dest = condor_tokens_dir / token_filename
     try:
@@ -68,6 +72,8 @@ def get_token_state(
     """
     Return whether the token is expired, missing, unreadable, or OK
     """
+    if "/" in token_filename or "\\" in token_filename or ":" in token_filename:
+        raise ValueError(f"token_filename cannot have a directory: {token_filename}")
     token_path = pathlib.Path.home() / ".condor/tokens.d" / token_filename
     try:
         contents = token_path.read_bytes()
