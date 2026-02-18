@@ -31,14 +31,19 @@ T_PathOrStr = t.Union[os.PathLike, str]
 #
 
 
-def write_token(token_filename: str, token_contents: bytes):
+def write_token(token_filename: str, token_contents: bytes) -> pathlib.Path:
     """
     Write the given bytes to a token file in the condor tokens dir.
 
-    token_filename: The name of the file (without directory) to create,
-        under the tokens directory.  (Should end in '.token')
+    Arguments:
+        token_filename:
+            The name of the file (without directory) to create
+            under the tokens directory.  (Should end in '.token')
 
-    token_contents: The bytes to write into the token file.
+        token_contents: The bytes to write into the token file.
+
+    Returns:
+        The path to where the file was written.
     """
     if "/" in token_filename or "\\" in token_filename or ":" in token_filename:
         raise ValueError(f"token_filename cannot have a directory: {token_filename}")
@@ -49,9 +54,10 @@ def write_token(token_filename: str, token_contents: bytes):
     with open(token_dest, mode="wb") as fh:
         token_dest.chmod(0o600)
         fh.write(token_contents)
+    return token_dest
 
 
-def token_stat(token_filename: str):
+def token_stat(token_filename: str) -> t.Optional[os.stat_result]:
     """
     Calls stat() on the token file and returns the results.  If there is
     an error (e.g., the file does not exist), returns None.
