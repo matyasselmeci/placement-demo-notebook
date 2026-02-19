@@ -68,6 +68,9 @@ class DeviceClient:
     def __init__(self, webapp_server: str, client_id: str):
         self.request_url = f"{webapp_server}{self.REQUEST_ENDPOINT}"
         self.client_id = client_id
+        self._reset_attrs()
+
+    def _reset_attrs(self):
         self.device_code = ""
         self.expires_at = 0.0
         self.interval = 0
@@ -75,6 +78,7 @@ class DeviceClient:
         self.verification_uri = ""
         self.verification_uri_complete = ""
         self.request_in_progress = False
+        self.access_token = b""
 
     def make_request(self) -> "DeviceClient":
         """
@@ -90,6 +94,7 @@ class DeviceClient:
             DeviceClientUnexpectedOutput:
                 If the message from the server is malformed somehow.
         """
+        self._reset_attrs()
         try:
             response = requests.post(
                 url=self.request_url,
@@ -135,6 +140,7 @@ class DeviceClient:
     def poll_for_token(self) -> t.Optional[bytes]:
         """
         Poll the server performing the device flow for the placement token.
+        Returns the token; also sets self.access_token to the token.
 
         Returns:
             The placement token encoded as bytes if successful, None if
@@ -201,6 +207,7 @@ class DeviceClient:
                 raise DeviceClientUnexpectedOutput(
                     "Failed to encode access token: %r" % err
                 )
+            self.access_token = access_token_b
             return access_token_b
 
     def poll_for_token_loop(self) -> bytes:
